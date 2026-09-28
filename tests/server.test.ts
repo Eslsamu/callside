@@ -115,7 +115,7 @@ describe('local HTTP API', () => {
       (
         await server.post(
           '/api/answer',
-          body({ settings: { ...DEFAULT_SETTINGS, model: '../../private' } }),
+          body({ settings: { ...DEFAULT_SETTINGS, model: '../../private' as never } }),
         )
       ).status,
     ).toBe(400);
@@ -146,7 +146,7 @@ describe('local HTTP API', () => {
         .filter((event) => event.type === 'delta')
         .map((event) => event.text)
         .join(''),
-    ).toContain('Demo-Vorschlag');
+    ).toContain('Demo suggestion');
     expect(output.at(-1)).toEqual({ type: 'done' });
   });
 
@@ -155,12 +155,12 @@ describe('local HTTP API', () => {
     expect(events(await (await server.post('/api/answer', body({ mode: 'auto' }))).text())).toEqual(
       [{ type: 'skip' }],
     );
-    const ordinary = await running(simpleProvider(['Wie ', 'können wir starten?']));
+    const ordinary = await running(simpleProvider(['How ', 'can we get started?']));
     expect(
       events(await (await ordinary.post('/api/answer', body({ mode: 'auto' }))).text()),
     ).toEqual([
-      { type: 'delta', text: 'Wie ' },
-      { type: 'delta', text: 'können wir starten?' },
+      { type: 'delta', text: 'How ' },
+      { type: 'delta', text: 'can we get started?' },
       { type: 'done' },
     ]);
     expect(WAIT_SENTINEL).toBe('[[WAIT]]');
@@ -179,7 +179,7 @@ describe('local HTTP API', () => {
     const transcript = Array.from({ length: 200 }, (_, i) => ({
       id: String(i),
       source: 'system' as const,
-      speaker: 'Gegenüber',
+      speaker: 'Other speaker',
       text: `${i}: ` + 'x'.repeat(300),
       timestamp: i,
       final: true,
@@ -190,7 +190,7 @@ describe('local HTTP API', () => {
         body({ transcript, settings: { ...DEFAULT_SETTINGS, maxOutputTokens: 99000 } }),
       )
     ).text();
-    expect(captured?.maxOutputTokens).toBe(2000);
+    expect(captured?.maxOutputTokens).toBe(32768);
     expect(captured?.instructions).toContain('untrusted');
     const context = JSON.parse(captured!.input).callTranscript as Array<{ text: string }>;
     expect(context.at(-1)?.text.startsWith('199:')).toBe(true);

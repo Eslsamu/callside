@@ -2,7 +2,7 @@ import { expect, test, type Page } from '@playwright/test';
 import { readFile } from 'node:fs/promises';
 
 async function startDemo(page: Page) {
-  await page.getByRole('button', { name: 'Demo ausprobieren', exact: true }).click();
+  await page.getByRole('button', { name: 'Try demo', exact: true }).click();
   await expect(page.getByTestId('transcript-entry').first()).toBeVisible();
   await expect.poll(() => page.getByTestId('transcript-entry').count()).toBeGreaterThan(1);
 }
@@ -23,7 +23,7 @@ test.beforeEach(async ({ page }) => {
     }
   });
   await page.goto('/');
-  await expect(page.getByRole('button', { name: 'Demo ausprobieren', exact: true })).toBeEnabled();
+  await expect(page.getByRole('button', { name: 'Try demo', exact: true })).toBeEnabled();
 });
 
 test.afterEach(async ({ page }) => {
@@ -38,28 +38,28 @@ test('demo produces a transcript and answers typed questions and F8 without a ke
   page,
 }) => {
   await startDemo(page);
-  const question = 'Welche konkrete Rückfrage sollte ich jetzt stellen?';
-  await page.getByLabel('Eigene Frage', { exact: true }).fill(question);
+  const question = 'What specific follow-up question should I ask now?';
+  await page.getByLabel('Your question', { exact: true }).fill(question);
   const manualRequest = page.waitForRequest(
     (request) => request.url().endsWith('/api/answer') && request.method() === 'POST',
   );
-  await page.getByRole('button', { name: 'Frage senden', exact: true }).click();
+  await page.getByRole('button', { name: 'Send question', exact: true }).click();
   const payload = (await manualRequest).postDataJSON();
   expect(payload).toMatchObject({ question, mode: 'manual', demo: true });
   expect(payload.transcript.length).toBeGreaterThan(1);
   await expect(page.getByTestId('suggestion').first()).toBeVisible();
-  await expect(page.getByRole('button', { name: /^Antwort vorschlagen/ })).toBeEnabled();
+  await expect(page.getByRole('button', { name: /^Suggest answer/ })).toBeEnabled();
 
   const keyboardRequest = page.waitForRequest(
     (request) => request.url().endsWith('/api/answer') && request.method() === 'POST',
   );
   await page.keyboard.press('F8');
   expect((await keyboardRequest).postDataJSON()).toMatchObject({ mode: 'manual', demo: true });
-  await expect(page.getByText('1 frühere Vorschläge', { exact: true })).toBeVisible();
+  await expect(page.getByText('1 previous suggestions', { exact: true })).toBeVisible();
 });
 
 test('automatic mode requests a contextual demo suggestion', async ({ page }) => {
-  await page.getByLabel('Automatische Hinweise', { exact: true }).check();
+  await page.getByLabel('Automatic hints', { exact: true }).check();
   const automaticRequest = page.waitForRequest(
     (request) =>
       request.url().endsWith('/api/answer') &&
@@ -74,56 +74,52 @@ test('automatic mode requests a contextual demo suggestion', async ({ page }) =>
 });
 
 test('edited prompts are used in answers and saved only when requested', async ({ page }) => {
-  await page.getByRole('button', { name: 'Einstellungen', exact: true }).click();
+  await page.getByRole('button', { name: 'Settings', exact: true }).click();
   await page
-    .getByRole('textbox', { name: 'System-Prompt', exact: true })
-    .fill('Antworte kurz und stelle eine Rückfrage, wenn Fakten fehlen.');
+    .getByRole('textbox', { name: 'System prompt', exact: true })
+    .fill('Answer briefly and ask a follow-up question when facts are missing.');
   await page
-    .getByRole('textbox', { name: 'Gesprächskontext', exact: true })
-    .fill('Wir planen einen zweiwöchigen Test mit genau drei Teilnehmern.');
+    .getByRole('textbox', { name: 'Conversation context', exact: true })
+    .fill('We are planning a two-week test with exactly three participants.');
   expect(await page.evaluate(() => localStorage.getItem('callside.settings.v1'))).toBeNull();
-  await page.getByRole('button', { name: 'Gespräch', exact: true }).click();
+  await page.getByRole('button', { name: 'Conversation', exact: true }).click();
   await startDemo(page);
   const answerRequest = page.waitForRequest(
     (request) => request.url().endsWith('/api/answer') && request.method() === 'POST',
   );
-  await page.getByRole('button', { name: /^Antwort vorschlagen/ }).click();
+  await page.getByRole('button', { name: /^Suggest answer/ }).click();
   expect((await answerRequest).postDataJSON().settings).toMatchObject({
-    systemPrompt: 'Antworte kurz und stelle eine Rückfrage, wenn Fakten fehlen.',
-    context: 'Wir planen einen zweiwöchigen Test mit genau drei Teilnehmern.',
+    systemPrompt: 'Answer briefly and ask a follow-up question when facts are missing.',
+    context: 'We are planning a two-week test with exactly three participants.',
   });
   const bootstrap = await page.request.get('/api/bootstrap');
   expect(await bootstrap.json()).toMatchObject({ hasApiKey: false });
-  await page.getByRole('button', { name: 'Einstellungen', exact: true }).click();
-  const activeSession = page.getByRole('region', { name: 'Aktive Sitzung', exact: true });
+  await page.getByRole('button', { name: 'Settings', exact: true }).click();
+  const activeSession = page.getByRole('region', { name: 'Active session', exact: true });
   await expect(activeSession).toBeVisible();
+  await expect(activeSession.getByRole('button', { name: 'End demo', exact: true })).toBeEnabled();
+  await expect(page.getByText(/^Audio settings are locked during a session\./)).toBeVisible();
   await expect(
-    activeSession.getByRole('button', { name: 'Demo beenden', exact: true }),
-  ).toBeEnabled();
-  await expect(
-    page.getByText(/^Die Audioeinstellungen sind während der Sitzung gesperrt\./),
-  ).toBeVisible();
-  await expect(
-    page.getByRole('checkbox', { name: 'Mikrofon transkribieren', exact: true }),
+    page.getByRole('checkbox', { name: 'Transcribe microphone', exact: true }),
   ).toBeDisabled();
-  await page.getByRole('button', { name: 'Vorlage speichern', exact: true }).click();
+  await page.getByRole('button', { name: 'Save template', exact: true }).click();
   await page.reload();
-  await page.getByRole('button', { name: 'Einstellungen', exact: true }).click();
-  await expect(page.getByRole('textbox', { name: 'Gesprächskontext', exact: true })).toHaveValue(
-    'Wir planen einen zweiwöchigen Test mit genau drei Teilnehmern.',
-  );
-  await page.getByRole('button', { name: 'Zurücksetzen', exact: true }).click();
-  await expect(page.getByRole('textbox', { name: 'Gesprächskontext', exact: true })).toHaveValue(
-    '',
-  );
+  await page.getByRole('button', { name: 'Settings', exact: true }).click();
+  await expect(
+    page.getByRole('textbox', { name: 'Conversation context', exact: true }),
+  ).toHaveValue('We are planning a two-week test with exactly three participants.');
+  await page.getByRole('button', { name: 'Reset', exact: true }).click();
+  await expect(
+    page.getByRole('textbox', { name: 'Conversation context', exact: true }),
+  ).toHaveValue('');
   expect(await page.evaluate(() => localStorage.getItem('callside.settings.v1'))).toBeNull();
 });
 
 test('exports contain the demo transcript and a new session clears it', async ({ page }) => {
   await startDemo(page);
-  await page.getByLabel('Sitzung exportieren', { exact: true }).click();
+  await page.getByLabel('Export session', { exact: true }).click();
   const downloadJson = page.waitForEvent('download');
-  await page.getByRole('button', { name: 'Sitzung als JSON', exact: true }).click();
+  await page.getByRole('button', { name: 'Session as JSON', exact: true }).click();
   const jsonFile = await downloadJson;
   expect(jsonFile.suggestedFilename()).toMatch(/\.json$/);
   const jsonPath = await jsonFile.path();
@@ -138,15 +134,15 @@ test('exports contain the demo transcript and a new session clears it', async ({
   expect(serialized).not.toContain('apiKey');
 
   const downloadMarkdown = page.waitForEvent('download');
-  await page.getByRole('button', { name: 'Transkript als Markdown', exact: true }).click();
+  await page.getByRole('button', { name: 'Transcript as Markdown', exact: true }).click();
   const markdownFile = await downloadMarkdown;
   expect(markdownFile.suggestedFilename()).toMatch(/\.md$/);
   const markdownPath = await markdownFile.path();
   const markdown = await readFile(markdownPath!, 'utf8');
   expect(markdown).toContain(session.transcript[0].text);
 
-  await page.getByRole('button', { name: 'Demo beenden', exact: true }).click();
-  await page.getByRole('button', { name: 'Neue Sitzung', exact: true }).click();
+  await page.getByRole('button', { name: 'End demo', exact: true }).click();
+  await page.getByRole('button', { name: 'New session', exact: true }).click();
   await expect(page.getByTestId('transcript-entry')).toHaveCount(0);
   await expect(page.getByTestId('suggestion')).toHaveCount(0);
 });
@@ -171,14 +167,14 @@ test('synthetic audio passes through the actual worklet and stopping releases th
           JSON.stringify({
             type: 'conversation.item.input_audio_transcription.delta',
             item_id,
-            delta: 'Synthetischer ',
+            delta: 'Synthetic ',
           }),
         );
         socket.send(
           JSON.stringify({
             type: 'conversation.item.input_audio_transcription.completed',
             item_id,
-            transcript: 'Synthetischer Audiotest.',
+            transcript: 'Synthetic audio test.',
           }),
         );
       }
@@ -187,7 +183,7 @@ test('synthetic audio passes through the actual worklet and stopping releases th
 
   // Install WebSocket interception before the page loads its application modules.
   await page.reload();
-  await page.getByRole('button', { name: 'Einstellungen', exact: true }).click();
+  await page.getByRole('button', { name: 'Settings', exact: true }).click();
 
   await page.evaluate(async () => {
     // Exercise production audio modules with a browser-generated MediaStream.
@@ -259,7 +255,7 @@ test('synthetic audio passes through the actual worklet and stopping releases th
       page.evaluate(() =>
         (window as any).__audioTest.entries.some(
           (entry: { final: boolean; text: string }) =>
-            entry.final && entry.text === 'Synthetischer Audiotest.',
+            entry.final && entry.text === 'Synthetic audio test.',
         ),
       ),
     )
@@ -271,4 +267,36 @@ test('synthetic audio passes through the actual worklet and stopping releases th
     errors: (window as any).__audioTest.errors,
   }));
   expect(result).toEqual({ state: 'ended', ended: true, errors: [] });
+});
+
+test('GPT-6 controls restrict models, normalize Astra reasoning, and persist API settings', async ({
+  page,
+}) => {
+  await page.getByRole('button', { name: 'Settings', exact: true }).click();
+  const model = page.getByRole('combobox', { name: 'Answer model', exact: true });
+  await expect(model.locator('option')).toHaveText(['GPT-6 Luna', 'GPT-6 Sol', 'GPT-6 Astra']);
+  await model.selectOption('gpt-6-astra');
+  const reasoning = page.getByRole('combobox', { name: 'Reasoning strength', exact: true });
+  await expect(reasoning).toHaveValue('low');
+  await expect(reasoning.locator('option')).toHaveText([
+    'Low',
+    'Medium',
+    'High',
+    'Extra high',
+    'Maximum',
+  ]);
+  await reasoning.selectOption('high');
+  await page.getByLabel('Fast mode', { exact: true }).check();
+  await page.getByRole('button', { name: 'Save template', exact: true }).click();
+  await page.reload();
+  await startDemo(page);
+  const request = page.waitForRequest(
+    (r) => r.url().endsWith('/api/answer') && r.method() === 'POST',
+  );
+  await page.getByRole('button', { name: /^Suggest answer/ }).click();
+  expect((await request).postDataJSON().settings).toMatchObject({
+    model: 'gpt-6-astra',
+    reasoningEffort: 'high',
+    fastMode: true,
+  });
 });

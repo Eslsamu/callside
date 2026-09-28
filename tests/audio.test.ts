@@ -100,7 +100,7 @@ describe('client voice activity detection', () => {
 describe('transcript ordering', () => {
   it('uses capture timestamps even when the second turn completes first', () => {
     const received: TranscriptEntry[] = [];
-    const assembler = new TranscriptAssembler('system', 'Gegenüber', (entry) =>
+    const assembler = new TranscriptAssembler('system', 'Other speaker', (entry) =>
       received.push(entry),
     );
     assembler.beginTurn(1000);

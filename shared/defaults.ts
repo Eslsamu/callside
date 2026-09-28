@@ -1,21 +1,23 @@
 import type { Settings } from './types.js';
 export const DEFAULT_SETTINGS: Settings = {
-  model: 'gpt-4.1-mini',
+  model: 'gpt-6-luna',
+  reasoningEffort: 'none',
+  fastMode: false,
   transcriptionModel: 'gpt-live-transcribe',
-  language: 'de',
+  language: '',
   systemPrompt:
-    'Du bist mein diskreter Gesprächsassistent. Gib mir eine kurze, direkt aussprechbare Antwort auf die letzte Frage im Gespräch. Nutze die Sprache des Gesprächs. Erfinde keine Fakten, Preise oder Zusagen. Wenn Informationen fehlen, schlage eine konkrete Rückfrage vor. Höchstens drei kurze Sätze.',
+    'You are my private conversation assistant. Suggest a short answer I can say aloud to the latest question. Use the language of the conversation. Do not invent facts, prices, or commitments. If information is missing, suggest a specific follow-up question. Use at most three short sentences.',
   autoPrompt:
-    'Gib mir einen Antwortvorschlag, wenn die andere Person eine Frage an mich stellt oder einen Einwand äußert. Bleibe bei Smalltalk, meinen eigenen Aussagen und bereits beantworteten Fragen still.',
+    'Suggest an answer when the other person asks me a question or raises an objection. Stay silent during small talk, my own statements, and questions already answered.',
   context: '',
-  maxOutputTokens: 300,
+  maxOutputTokens: 4096,
   autoCooldownMs: 8000,
   captureMode: 'realtime',
   captureMic: true,
   captureSystem: true,
   micDeviceId: '',
   systemDeviceId: '',
-  micLabel: 'Ich',
-  systemLabel: 'Gegenüber',
+  micLabel: 'Me',
+  systemLabel: 'Other speaker',
   diarizationChunkSeconds: 8,
 };

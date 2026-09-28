@@ -117,7 +117,7 @@ describe('realtime audio transport', () => {
     TestSocket.latest.close();
     await stopped;
     expect(cb.onError).toHaveBeenCalledOnce();
-    expect(cb.onError).toHaveBeenCalledWith(expect.stringContaining('unvollständig'));
+    expect(cb.onError).toHaveBeenCalledWith(expect.stringContaining('incomplete'));
   });
 });
 
@@ -142,7 +142,7 @@ describe('diarization queue', () => {
               id: 'system:block:A',
               speaker: 'A',
               source: 'system',
-              text: 'Hallo',
+              text: 'Hello',
               timestamp: 5000,
               final: true,
             },
@@ -158,10 +158,10 @@ describe('diarization queue', () => {
     expect(fetch).toHaveBeenCalledOnce();
     expect(cb.onTranscript).toHaveBeenCalledWith(
       expect.objectContaining({
-        text: 'Hallo',
+        text: 'Hello',
         timestamp: 5000,
         id: 'system:block:A',
-        speaker: 'Gegenüber · Sprecher A · Block 1',
+        speaker: 'Other speaker · Speaker A · Chunk 1',
       }),
     );
   });
@@ -190,7 +190,7 @@ describe('diarization queue', () => {
     await sink.stop();
     expect(fetch).toHaveBeenCalledOnce();
     expect(fail).toHaveBeenCalledOnce();
-    expect(fail.mock.calls[0][0]).toContain('kommt nicht nach');
+    expect(fail.mock.calls[0][0]).toContain('cannot keep up');
     expect(aborted).toBe(true);
   });
 
@@ -218,7 +218,7 @@ describe('capture startup cleanup', () => {
       },
     });
     await expect(startCapture(DEFAULT_SETTINGS, 'token', callbacks())).rejects.toThrow(
-      'Audiozugriff wurde nicht freigegeben',
+      'Audio access was denied',
     );
     expect(track.stop).toHaveBeenCalledOnce();
   });

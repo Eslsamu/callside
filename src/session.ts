@@ -1,19 +1,20 @@
+import { ANSWER_MODELS, reasoningOptions } from '../shared/models';
 import type { Settings, Suggestion, TranscriptEntry } from '../shared/types';
 export const DEMO_TURNS = [
   {
     source: 'system' as const,
-    text: 'Wir suchen eine Lösung, die unser Vertriebsteam im Gespräch unterstützt.',
+    text: 'We are looking for a solution that supports our sales team during calls.',
   },
-  { source: 'mic' as const, text: 'Was kostet euch im Moment die meiste Zeit?' },
+  { source: 'mic' as const, text: 'What takes the most time right now?' },
   {
     source: 'system' as const,
-    text: 'Die Vorbereitung. Jeder sucht sich Informationen aus verschiedenen Tools zusammen.',
+    text: 'Preparation. Everyone gathers information from several different tools.',
   },
   {
     source: 'mic' as const,
-    text: 'Verstanden. Dann sollten wir zuerst diesen Ablauf genauer anschauen.',
+    text: 'Understood. Let us look at that process first.',
   },
-  { source: 'system' as const, text: 'Wie würdest du einen ersten gemeinsamen Test aufsetzen?' },
+  { source: 'system' as const, text: 'How would you set up our first test together?' },
 ];
 export function sessionMarkdown(
   entries: TranscriptEntry[],
@@ -21,17 +22,17 @@ export function sessionMarkdown(
   demo: boolean,
 ): string {
   return [
-    '# Callside Sitzung',
-    demo ? '\nDemo: synthetisches Beispielgespräch.\n' : '',
-    '## Transkript',
+    '# Callside session',
+    demo ? '\nDemo: synthetic sample conversation.\n' : '',
+    '## Transcript',
     ...entries.map(
       (e) =>
-        `\n**${e.speaker}** (${new Date(e.timestamp).toLocaleTimeString('de-DE')}): ${e.text}${e.final ? '' : ' [vorläufig]'}`,
+        `\n**${e.speaker}** (${new Date(e.timestamp).toLocaleTimeString('en-GB')}): ${e.text}${e.final ? '' : ' [partial]'}`,
     ),
-    '\n## Antwortvorschläge',
+    '\n## Answer suggestions',
     ...suggestions.map(
       (s) =>
-        `\n### ${s.mode === 'auto' ? 'Automatisch' : 'Manuell'}${s.question ? `: ${s.question}` : ''}\n\n${s.text}`,
+        `\n### ${s.mode === 'auto' ? 'Automatic' : 'Manual'}${s.question ? `: ${s.question}` : ''}\n\n${s.text}`,
     ),
   ].join('\n');
 }
@@ -42,8 +43,11 @@ export function safeSettings(stored: unknown, defaults: Settings): Settings {
     const value = (stored as Record<string, unknown>)[key];
     if (typeof value === typeof defaults[key]) Object.assign(result, { [key]: value });
   }
+  if (!ANSWER_MODELS.some((model) => model === result.model)) result.model = defaults.model;
+  if (!reasoningOptions(result.model).includes(result.reasoningEffort))
+    result.reasoningEffort = result.model === 'gpt-6-astra' ? 'low' : defaults.reasoningEffort;
   result.captureMode = result.captureMode === 'diarized' ? 'diarized' : 'realtime';
-  result.maxOutputTokens = Math.max(64, Math.min(2000, result.maxOutputTokens));
+  result.maxOutputTokens = Math.max(64, Math.min(32768, result.maxOutputTokens));
   result.autoCooldownMs = Math.max(3000, Math.min(60000, result.autoCooldownMs));
   result.diarizationChunkSeconds = Math.max(4, Math.min(30, result.diarizationChunkSeconds));
   return result;

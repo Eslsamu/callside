@@ -84,7 +84,7 @@ export function attachRealtime(server: Server, options: RealtimeProxyOptions): (
       if (client.readyState === WebSocket.OPEN && client.bufferedAmount < 1_000_000)
         client.send(JSON.stringify(event));
       else if (client.readyState === WebSocket.OPEN)
-        fail('Die Verbindung ist zu langsam. Bitte Aufnahme neu starten.', 'backpressure');
+        fail('The connection is too slow. Restart recording.', 'backpressure');
     };
     const fail = (message: string, code = 'connection_error') => {
       if (ended) return;
@@ -96,48 +96,43 @@ export function attachRealtime(server: Server, options: RealtimeProxyOptions): (
       upstream?.terminate();
     };
     const setupTimeout = setTimeout(
-      () =>
-        fail('OpenAI-Transkription konnte nicht rechtzeitig gestartet werden.', 'setup_timeout'),
+      () => fail('OpenAI transcription did not start in time.', 'setup_timeout'),
       25000,
     );
     const sessionTimeout = setTimeout(
-      () =>
-        fail('Die Sitzung hat zwei Stunden erreicht. Bitte Aufnahme neu starten.', 'session_limit'),
+      () => fail('The session has reached two hours. Restart recording.', 'session_limit'),
       2 * 60 * 60 * 1000,
     );
 
     client.on('message', (raw, binary) => {
       if (ended) return;
       if (binary) {
-        fail('Ungültiges Nachrichtenformat.', 'invalid_message');
+        fail('Invalid message format.', 'invalid_message');
         return;
       }
       let event: unknown;
       try {
         event = JSON.parse(raw.toString());
       } catch {
-        fail('Ungültiges JSON.', 'invalid_message');
+        fail('Invalid JSON.', 'invalid_message');
         return;
       }
       if (!configured) {
         const config = configureSchema.safeParse(event);
         if (!config.success) {
-          fail(
-            'Ungültiges Transkriptionsmodell, Sprache oder Konfiguration.',
-            'invalid_configuration',
-          );
+          fail('Invalid transcription model, language, or configuration.', 'invalid_configuration');
           return;
         }
         configured = true;
         const key = options.getApiKey();
         if (!key) {
-          fail('Bitte zuerst einen OpenAI API-Key hinterlegen.', 'missing_key');
+          fail('Add an OpenAI API key first.', 'missing_key');
           return;
         }
         try {
           upstream = (options.connect ?? openRealtime)(key);
         } catch {
-          fail('OpenAI-Verbindung konnte nicht gestartet werden.');
+          fail('Could not connect to OpenAI.');
           return;
         }
         upstream.on('open', () => {
@@ -149,7 +144,7 @@ export function attachRealtime(server: Server, options: RealtimeProxyOptions): (
           try {
             message = JSON.parse(rawEvent.toString()) as Record<string, unknown>;
           } catch {
-            fail('OpenAI lieferte eine ungültige Nachricht.');
+            fail('OpenAI returned an invalid message.');
             return;
           }
           if (message.type === 'session.updated') {
@@ -168,7 +163,7 @@ export function attachRealtime(server: Server, options: RealtimeProxyOptions): (
                 ? error.code
                 : 'transcription_error';
             fail(
-              `OpenAI-Transkription fehlgeschlagen (${code}). Bitte Modellzugang, API-Guthaben und Sprache prüfen.`,
+              `OpenAI transcription failed (${code}). Check model access, API balance, and language.`,
               code,
             );
           } else if (
@@ -182,35 +177,32 @@ export function attachRealtime(server: Server, options: RealtimeProxyOptions): (
             send(message);
         });
         upstream.on('error', () =>
-          fail(
-            'OpenAI-Verbindung fehlgeschlagen. Bitte API-Key, Netzwerk und Modellzugang prüfen.',
-          ),
+          fail('OpenAI connection failed. Check your API key, network, and model access.'),
         );
         upstream.on('unexpected-response', (_request, response) => {
           response.resume();
           fail(
-            `OpenAI hat die Verbindung abgelehnt (HTTP ${response.statusCode ?? 0}). Bitte API-Key, Guthaben und Modellzugang prüfen.`,
+            `OpenAI rejected the connection (HTTP ${response.statusCode ?? 0}). Check your API key, balance, and model access.`,
           );
         });
         upstream.on('close', () => {
-          if (!ended)
-            fail('OpenAI hat die Transkriptionsverbindung beendet. Bitte Aufnahme neu starten.');
+          if (!ended) fail('OpenAI closed the transcription connection. Restart recording.');
         });
         return;
       }
       if (!ready || !upstream || upstream.readyState !== WebSocket.OPEN) {
-        fail('Audio wurde vor der bestätigten Sitzung gesendet.', 'not_ready');
+        fail('Audio was sent before the session was ready.', 'not_ready');
         return;
       }
       const parsed = audioEventSchema.safeParse(event);
       if (!parsed.success) {
-        fail('Ungültiges Audioereignis.', 'invalid_audio');
+        fail('Invalid audio event.', 'invalid_audio');
         return;
       }
       if (parsed.data.type === 'input_audio_buffer.append') {
         const bytes = Buffer.from(parsed.data.audio, 'base64');
         if (bytes.length % 2 || bytes.toString('base64') !== parsed.data.audio) {
-          fail('Audio muss PCM16 sein.', 'invalid_audio');
+          fail('Audio must be PCM16.', 'invalid_audio');
           return;
         }
         if (Date.now() - windowStart > 10000) {
@@ -220,19 +212,19 @@ export function attachRealtime(server: Server, options: RealtimeProxyOptions): (
         audioBytesThisWindow += bytes.length;
         audioBytesThisTurn += bytes.length;
         if (audioBytesThisWindow > 960000 || audioBytesThisTurn > 2880000) {
-          fail('Audiopuffer zu groß. Bitte Aufnahme neu starten.', 'audio_limit');
+          fail('Audio buffer too large. Restart recording.', 'audio_limit');
           return;
         }
       } else {
         if (audioBytesThisTurn < 4800) {
-          fail('Audioabschnitt muss mindestens 100 ms enthalten.', 'audio_too_short');
+          fail('Audio chunks must contain at least 100 ms.', 'audio_too_short');
           return;
         }
         audioBytesThisTurn = 0;
       }
       // WebSocket buffers only short bursts. Never keep an unbounded offline audio queue.
       if (upstream.bufferedAmount > 1_000_000) {
-        fail('OpenAI-Verbindung zu langsam. Bitte Aufnahme neu starten.', 'backpressure');
+        fail('OpenAI connection too slow. Restart recording.', 'backpressure');
         return;
       }
       upstream.send(JSON.stringify(parsed.data));

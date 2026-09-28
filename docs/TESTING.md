@@ -10,9 +10,9 @@ npm run check
 
 The build performs TypeScript checking for the UI and server. Unit/integration tests exercise application behavior without a paid provider connection. Playwright runs a headless Chromium instance against a separate local development server using an empty provider key.
 
-The initial suite contains **37 unit/integration tests** and **5 browser tests**. These counts describe the checks in this repository; hardware and real provider acceptance are separate below.
+The suite contains **43 unit/integration tests** and **6 browser tests**. These counts describe the checks in this repository; hardware and real provider acceptance are separate below.
 
-Browser checks use the explicit demo fixture to cover transcript rendering, manually requested suggestions, keyboard triggering, automatic hints, configuration, and exports. Demo tests guard against accidental use of real capture devices. The CI workflow does not receive an OpenAI key.
+Browser checks use the explicit demo fixture to cover transcript rendering, manually requested suggestions, keyboard triggering, automatic hints, configuration, GPT-6 model/reasoning/Fast settings, and exports. Demo tests guard against accidental use of real capture devices. The CI workflow does not receive an OpenAI key.
 
 A separate browser check generates synthetic audio with an oscillator and supplies its `MediaStream` to the actual capture code. It exercises AudioWorklet processing, PCM packets, turn commits, transcript events, and track cleanup. Its WebSocket peer is intercepted, so no audio leaves the test server/browser environment.
 

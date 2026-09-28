@@ -184,7 +184,7 @@ app
       return;
     }
     dialog.showErrorBox(
-      'Callside konnte nicht starten',
+      'Callside could not start',
       error instanceof Error ? error.message : String(error),
     );
     app.quit();

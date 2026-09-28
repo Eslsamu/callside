@@ -1,3 +1,4 @@
+import { ANSWER_MODELS, REASONING_EFFORTS, reasoningOptions } from '../shared/models.js';
 import { z } from 'zod';
 import { DEFAULT_SETTINGS } from '../shared/defaults.js';
 
@@ -12,7 +13,9 @@ const model = z
   .regex(/^[a-zA-Z0-9._:-]+$/);
 export const settingsSchema = z
   .object({
-    model,
+    model: z.enum(ANSWER_MODELS),
+    reasoningEffort: z.enum(REASONING_EFFORTS).default(DEFAULT_SETTINGS.reasoningEffort),
+    fastMode: z.boolean().default(false),
     transcriptionModel: model,
     language,
     systemPrompt: z.string().max(12000),
@@ -28,6 +31,10 @@ export const settingsSchema = z
     micLabel: z.string().max(80),
     systemLabel: z.string().max(80),
     diarizationChunkSeconds: z.number().min(3).max(30),
+  })
+  .refine((settings) => reasoningOptions(settings.model).includes(settings.reasoningEffort), {
+    message: 'Unsupported reasoning strength for this model',
+    path: ['reasoningEffort'],
   })
   .default(DEFAULT_SETTINGS);
 export const answerSchema = z.object({
@@ -121,9 +128,7 @@ export function decodeWav(encoded: string): Buffer {
     data.readUInt32LE(4) !== data.length - 8 ||
     (data.length - 44) % 2 !== 0
   ) {
-    throw new Error(
-      'Ungültiges Audio. Erwartet wird mono WAV, PCM16, 24 kHz (maximal 60 Sekunden).',
-    );
+    throw new Error('Invalid audio. Expected mono WAV, PCM16, 24 kHz (up to 60 seconds).');
   }
   return data;
 }

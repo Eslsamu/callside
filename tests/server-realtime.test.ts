@@ -92,14 +92,14 @@ describe('Realtime proxy with a local provider fixture', () => {
       JSON.stringify({
         type: 'conversation.item.input_audio_transcription.completed',
         item_id: 'item_1',
-        transcript: 'Guten Tag',
+        transcript: 'Good morning',
       }),
     );
     await vi.waitFor(() =>
       expect(fixture.received).toContainEqual({
         type: 'conversation.item.input_audio_transcription.completed',
         item_id: 'item_1',
-        transcript: 'Guten Tag',
+        transcript: 'Good morning',
       }),
     );
   });

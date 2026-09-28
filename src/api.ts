@@ -13,9 +13,9 @@ export async function* streamAnswer(
   });
   if (!response.ok) {
     const data = await response.json().catch(() => ({}));
-    throw new Error(data.error || `Anfrage fehlgeschlagen (${response.status}).`);
+    throw new Error(data.error || `Request failed (${response.status}).`);
   }
-  if (!response.body) throw new Error('Die Antwort konnte nicht gelesen werden.');
+  if (!response.body) throw new Error('Could not read the answer.');
   const reader = response.body.getReader();
   const decoder = new TextDecoder();
   let buffer = '';
@@ -43,7 +43,7 @@ export async function* streamAnswer(
       if (done) break;
     }
     if (!terminal && !signal.aborted)
-      throw new Error('Die Antwortverbindung wurde unterbrochen. Versuche es erneut.');
+      throw new Error('The answer connection was interrupted. Try again.');
   } finally {
     await reader.cancel().catch(() => {});
     reader.releaseLock();

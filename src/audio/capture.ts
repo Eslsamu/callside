@@ -18,13 +18,13 @@ function captureError(error: unknown): Error {
   if (!(error instanceof Error)) return new Error(String(error));
   if (error.name === 'NotAllowedError')
     return new Error(
-      'Audiozugriff wurde nicht freigegeben. Erlaube Mikrofon und Systemaudio in den Systemeinstellungen und starte die Aufnahme erneut.',
+      'Audio access was denied. Allow microphone and system audio in system settings and restart recording.',
     );
   if (error.name === 'NotFoundError')
-    return new Error('Der ausgewählte Audioeingang ist nicht verfügbar. Wähle ein anderes Gerät.');
+    return new Error('The selected audio input is unavailable. Select another device.');
   if (error.name === 'NotReadableError')
     return new Error(
-      'Der Audioeingang konnte nicht geöffnet werden. Prüfe das Gerät und seine Systemberechtigungen.',
+      'Could not open the audio input. Check the device and its system permissions.',
     );
   return error;
 }
@@ -35,12 +35,12 @@ export async function startCapture(
   callbacks: CaptureCallbacks,
 ): Promise<CaptureHandle> {
   if (!settings.captureMic && !settings.captureSystem)
-    throw new Error('Wähle mindestens eine Audioquelle aus.');
+    throw new Error('Select at least one audio source.');
   if (!navigator.mediaDevices?.getUserMedia)
-    throw new Error('Audioaufnahme benötigt localhost oder HTTPS und einen unterstützten Browser.');
+    throw new Error('Audio capture requires localhost or HTTPS and a supported browser.');
   if (!globalThis.AudioWorkletNode)
     throw new Error(
-      'Dieser Browser unterstützt keine AudioWorklets. Nutze die Desktop-App oder einen aktuellen Chromium-Browser.',
+      'This browser does not support AudioWorklets. Use the desktop app or a current Chromium browser.',
     );
   const sources: SourceCapture[] = [];
   let stopping = false;
@@ -77,7 +77,7 @@ export async function startCapture(
         sources.map(async (capture) => {
           await capture.sink?.stop();
           callbacks.onLevel(capture.source, 0);
-          callbacks.onStatus(capture.source, 'Beendet');
+          callbacks.onStatus(capture.source, 'Ended');
         }),
       );
       if (initialized) callbacks.onEnded();
@@ -97,13 +97,13 @@ export async function startCapture(
     sources.push(capture);
     if (!stream.getAudioTracks().length)
       throw new Error(
-        'Die Freigabe enthält kein Systemaudio. Aktiviere „Audio teilen“, verwende die Desktop-App oder wähle einen virtuellen Audioeingang.',
+        'The shared stream has no system audio. Enable audio sharing, use the desktop app, or select a virtual audio input.',
       );
     // Display capture requires a video track. It stays local and is released with the session.
     for (const track of stream.getTracks())
       track.onended = () => {
         if (!stopping) {
-          callbacks.onStatus(source, 'Audiofreigabe beendet');
+          callbacks.onStatus(source, 'Audio sharing ended');
           if (initialized) void stop();
           else startupEnded = true;
         }
@@ -115,7 +115,7 @@ export async function startCapture(
     // Invoke display capture while the user's click is still the active browser gesture.
     const requests: Promise<SourceCapture>[] = [];
     if (settings.captureSystem) {
-      callbacks.onStatus('system', 'Audioquelle auswählen …');
+      callbacks.onStatus('system', 'Select audio source …');
       const systemDeviceId = (settings as Settings & { systemDeviceId?: string }).systemDeviceId;
       const request = systemDeviceId
         ? navigator.mediaDevices.getUserMedia({
@@ -134,7 +134,7 @@ export async function startCapture(
       requests.push(acquire('system', request));
     }
     if (settings.captureMic) {
-      callbacks.onStatus('mic', 'Mikrofon verbinden …');
+      callbacks.onStatus('mic', 'Connecting microphone …');
       requests.push(
         acquire(
           'mic',
@@ -156,8 +156,7 @@ export async function startCapture(
     );
     if (rejected) throw rejected.reason;
 
-    if (stopping || startupEnded)
-      throw new Error('Die Audiofreigabe wurde während des Starts beendet.');
+    if (stopping || startupEnded) throw new Error('Audio sharing ended during startup.');
     const prepared = await Promise.allSettled(
       sources.map(async (capture) => {
         capture.sink =
@@ -166,12 +165,12 @@ export async function startCapture(
             : await createRealtimeSink(settings, token, capture.source, callbacks, fail);
         if (stopping) {
           await capture.sink.stop();
-          throw new Error('Die Aufnahme wurde während des Starts beendet.');
+          throw new Error('Recording ended during startup.');
         }
         const context = new AudioContext({ latencyHint: 'interactive' });
         capture.context = context;
         await context.audioWorklet.addModule('/pcm-worklet.js');
-        if (stopping) throw new Error('Die Aufnahme wurde während des Starts beendet.');
+        if (stopping) throw new Error('Recording ended during startup.');
         const node = new AudioWorkletNode(context, 'callside-pcm', {
           numberOfInputs: 1,
           numberOfOutputs: 1,
@@ -215,7 +214,7 @@ export async function startCapture(
             clearTimeout(capture.signalTimer);
             callbacks.onStatus(
               capture.source,
-              settings.captureMode === 'realtime' ? 'Live' : 'Hört zu · Sprecher je Block',
+              settings.captureMode === 'realtime' ? 'Live' : 'Listening · speakers per chunk',
             );
           }
           if (vad) {
@@ -226,8 +225,7 @@ export async function startCapture(
             if (result.commit) capture.sink!.commit();
           } else capture.sink!.append(samples, timestamp);
         };
-        node.onprocessorerror = () =>
-          fail('Die Audioverarbeitung wurde unterbrochen. Starte die Aufnahme erneut.');
+        node.onprocessorerror = () => fail('Audio processing was interrupted. Restart recording.');
         capture.finishWorklet = () =>
           new Promise<void>((resolve) => {
             const timer = setTimeout(() => {
@@ -247,7 +245,7 @@ export async function startCapture(
           if (!hadSignal && !stopping)
             callbacks.onStatus(
               capture.source,
-              'Noch kein Audiosignal · Quelle und Berechtigung prüfen',
+              'No audio signal yet · check source and permissions',
             );
         }, 12_000);
       }),
@@ -256,9 +254,8 @@ export async function startCapture(
       (result): result is PromiseRejectedResult => result.status === 'rejected',
     );
     if (preparationFailed) throw preparationFailed.reason;
-    if (stopping || startupEnded)
-      throw new Error('Die Audiofreigabe wurde während des Starts beendet.');
-    if (failed) throw new Error('Die Audioverbindung wurde während des Starts unterbrochen.');
+    if (stopping || startupEnded) throw new Error('Audio sharing ended during startup.');
+    if (failed) throw new Error('The audio connection was interrupted during startup.');
     initialized = true;
     return { stop };
   } catch (error) {

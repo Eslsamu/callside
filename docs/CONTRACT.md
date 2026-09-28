@@ -1,6 +1,6 @@
 # Internal API contract
 
-All runtime HTTP routes share the UI origin on a loopback server. GET /api/bootstrap returns Bootstrap (token per server process, hasApiKey, suggested models). Other API requests need X-Callside-Token. POST /api/key {apiKey} stores a key in process memory only, responds {hasApiKey}. Environment key also supported. No provider key returned to renderer.
+All runtime HTTP routes share the UI origin on a loopback server. GET /api/bootstrap returns Bootstrap (token per server process, hasApiKey, allowed answer models). Other API requests need X-Callside-Token. POST /api/key {apiKey} stores a key in process memory only, responds {hasApiKey}. Environment key also supported. No provider key returned to renderer.
 
 POST /api/answer takes AnswerRequest and streams SSE data: JSON AnswerEvent. Abort cancels provider. mode:auto uses a WAIT sentinel hidden from UI when model judges no intervention. demo:true provides deterministic, clearly marked local fixture responses without network.
 
@@ -11,3 +11,11 @@ POST /api/diarize accepts JSON {audio:base64 WAV, source, chunkId, timestamp, la
 src/audio/capture.ts exports async startCapture(settings:Settings, token:string, callbacks:CaptureCallbacks):Promise<CaptureHandle>. Calls native/browser getDisplayMedia for system source and getUserMedia for mic. Separate sources, AudioWorklet PCM16 24kHz client VAD. Realtime and diarized modes selectable. stop() flushes final speech, cancels tracks, drains pending transcriptions boundedly.
 
 desktop/main.cjs boots built server via exported startServer({port:0,production:true}) -> {url,close}. Loads url in sandboxed window. Preload exposes window.callsideDesktop {onAnswer(callback):()=>void, setAlwaysOnTop(boolean):Promise<void>, platform:string}. Global CommandOrControl+Shift+Space sends callside:answer. Package scripts own build.
+
+## Answer model settings
+
+`settings.model` accepts only `gpt-6-luna`, `gpt-6-sol`, or `gpt-6-astra`. `reasoningEffort` accepts `none`, `low`, `medium`, `high`, `xhigh`, or `max`; Astra does not accept `none`. Invalid combinations are rejected before an upstream request. Saved unsupported model IDs migrate to Luna; switching to Astra normalizes `none` to `low`.
+
+The Responses provider sends `reasoning: { effort: reasoningEffort }`. `fastMode: true` sends `service_tier: "priority"`, the SDK-supported alias for Fast processing; false explicitly sends `service_tier: "default"`. Availability and any processing downgrade are controlled by OpenAI. Fast is a request, not a latency guarantee. The default is Luna, no reasoning, Standard processing, and a 4,096-token total output budget. The app caps output at 32,768 tokens, including reasoning tokens. Prompts still request short visible suggestions.
+
+Model capabilities and Fast pricing are documented in the official [Luna](https://developers.openai.com/api/docs/models/gpt-6-luna), [Sol](https://developers.openai.com/api/docs/models/gpt-6-sol), [Astra](https://developers.openai.com/api/docs/models/gpt-6-astra), and [Fast processing](https://developers.openai.com/api/docs/guides/priority-processing) documentation. Live provider access is not exercised by repository tests.

@@ -48,10 +48,10 @@ export async function createRealtimeSink(
     }
   };
 
-  callbacks.onStatus(source, 'Transkription verbindet …');
+  callbacks.onStatus(source, 'Connecting transcription …');
   await new Promise<void>((resolve, reject) => {
     const timeout = setTimeout(
-      () => die('Die Transkription hat nach 20 Sekunden nicht geantwortet.'),
+      () => die('Transcription did not respond within 20 seconds.'),
       20_000,
     );
     const die = (message: string) => {
@@ -79,7 +79,7 @@ export async function createRealtimeSink(
       try {
         event = JSON.parse(String(message.data)) as Record<string, unknown>;
       } catch {
-        die('Ungültige Antwort der Transkriptionsverbindung.');
+        die('Invalid response from the transcription connection.');
         return;
       }
       if (event.type === 'ready') {
@@ -96,9 +96,7 @@ export async function createRealtimeSink(
         const detail = event.error as { message?: string } | undefined;
         die(
           detail?.message ||
-            (typeof event.message === 'string'
-              ? event.message
-              : 'Die Transkription wurde unterbrochen.'),
+            (typeof event.message === 'string' ? event.message : 'Transcription was interrupted.'),
         );
         return;
       }
@@ -106,28 +104,27 @@ export async function createRealtimeSink(
       onProgress?.();
     };
     socket.onerror = () =>
-      die('Die Transkriptionsverbindung ist fehlgeschlagen. Prüfe Netzwerk und API-Schlüssel.');
+      die('The transcription connection failed. Check your network and API key.');
     socket.onclose = () => {
       clearTimeout(timeout);
       if (closing)
         reportIncomplete(
-          'Die Verbindung wurde vor dem letzten Transkriptabschluss geschlossen. Der letzte Abschnitt ist unvollständig.',
+          'The connection closed before the final transcript was complete. The last segment is incomplete.',
         );
       onProgress?.();
-      if (!closing && !failed)
-        die('Die Transkriptionsverbindung wurde geschlossen. Starte die Aufnahme erneut.');
+      if (!closing && !failed) die('The transcription connection closed. Restart recording.');
     };
   });
 
   const send = (event: object) => {
     if (failed) return;
     if (socket.readyState !== WebSocket.OPEN) {
-      fail('Die Audioverbindung ist nicht mehr verfügbar.');
+      fail('The audio connection is no longer available.');
       return;
     }
     // 4 seconds of PCM plus framing is already a visible interruption. Stop instead of dropping audio.
     if (socket.bufferedAmount > 256_000) {
-      fail('Die Audioübertragung kommt nicht nach. Die Aufnahme wird beendet.');
+      fail('Audio transmission cannot keep up. Recording is stopping.');
       return;
     }
     socket.send(JSON.stringify(event));
@@ -160,7 +157,7 @@ export async function createRealtimeSink(
           onProgress = undefined;
           if (timedOut)
             reportIncomplete(
-              'Die Aufnahme ist beendet. Ein letzter Transkriptabschnitt konnte nicht rechtzeitig abgeschlossen werden.',
+              'Recording has ended. The final transcript segment could not finish in time.',
             );
           socket.close();
           resolve();
@@ -214,7 +211,7 @@ export function createDiarizedSink(
       const timeout = setTimeout(() => abort?.abort(), 30_000);
       callbacks.onStatus(
         source,
-        `Sprecher werden erkannt${queue.length ? ` · ${queue.length} Blöcke warten` : ' …'}`,
+        `Identifying speakers${queue.length ? ` · ${queue.length} chunks waiting` : ' …'}`,
       );
       try {
         const response = await fetch('/api/diarize', {
@@ -234,7 +231,7 @@ export function createDiarizedSink(
           throw new Error(
             typeof result.error === 'string'
               ? result.error
-              : `Sprechererkennung fehlgeschlagen (${response.status}).`,
+              : `Speaker identification failed (${response.status}).`,
           );
         if (!cancelled)
           for (const entry of result.entries) {
@@ -242,7 +239,7 @@ export function createDiarizedSink(
             const speakerLabel = entry.speaker.split(':').at(-1) || '?';
             callbacks.onTranscript({
               ...entry,
-              speaker: `${sourceLabel} · Sprecher ${speakerLabel} · Block ${job.sequence}`,
+              speaker: `${sourceLabel} · Speaker ${speakerLabel} · Chunk ${job.sequence}`,
             });
           }
       } catch (error) {
@@ -252,7 +249,7 @@ export function createDiarizedSink(
           fail(
             error instanceof Error && error.name !== 'AbortError'
               ? error.message
-              : 'Die Sprechererkennung hat nicht rechtzeitig geantwortet.',
+              : 'Speaker identification timed out.',
           );
         }
       } finally {
@@ -261,7 +258,7 @@ export function createDiarizedSink(
     }
     active = false;
     abort = undefined;
-    if (!stopped && !cancelled) callbacks.onStatus(source, 'Hört zu · Sprecher je Block');
+    if (!stopped && !cancelled) callbacks.onStatus(source, 'Listening · speakers per chunk');
     idle?.();
   };
 
@@ -278,7 +275,7 @@ export function createDiarizedSink(
       queue.length = 0;
       abort?.abort();
       fail(
-        'Die Sprechererkennung kommt nicht nach. Die Aufnahme wird beendet; erhöhe die Blocklänge oder nutze Live-Transkription.',
+        'Speaker identification cannot keep up. Recording is stopping; increase chunk length or use live transcription.',
       );
       return;
     }
@@ -290,7 +287,7 @@ export function createDiarizedSink(
     });
     void processQueue();
   };
-  callbacks.onStatus(source, 'Hört zu · Sprecher je Block');
+  callbacks.onStatus(source, 'Listening · speakers per chunk');
   return {
     beginTurn() {},
     append(samples, timestamp) {
@@ -314,7 +311,7 @@ export function createDiarizedSink(
         const timer = setTimeout(() => {
           if (active || queue.length)
             callbacks.onError(
-              'Die Aufnahme ist beendet. Die letzten Blöcke konnten nicht rechtzeitig transkribiert werden.',
+              'Recording has ended. The final chunks could not be transcribed in time.',
             );
           cancelled = true;
           queue.length = 0;

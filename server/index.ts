@@ -1,3 +1,4 @@
+import { ANSWER_MODELS } from '../shared/models.js';
 import express, { type NextFunction, type Request, type Response } from 'express';
 import { createServer, type IncomingMessage } from 'node:http';
 import { randomBytes, timingSafeEqual } from 'node:crypto';
@@ -81,7 +82,7 @@ export async function startServer(options: ServerOptions = {}): Promise<RunningS
         "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self'; media-src 'self' blob:; worker-src 'self' blob:; object-src 'none'; base-uri 'none'; frame-ancestors 'none'",
       );
     if (!validOrigin(req)) {
-      res.status(403).json({ error: 'Nur der lokale Callside-Ursprung ist erlaubt.' });
+      res.status(403).json({ error: 'Only the local Callside origin is allowed.' });
       return;
     }
     next();
@@ -91,17 +92,17 @@ export async function startServer(options: ServerOptions = {}): Promise<RunningS
     res.json({
       token,
       hasApiKey: Boolean(getApiKey()),
-      models: ['gpt-4.1-mini', 'gpt-4.1', 'gpt-5-mini'],
+      models: [...ANSWER_MODELS],
     });
   });
   app.use('/api', (req, res, next) => {
     res.setHeader('Cache-Control', 'no-store');
     if (!equalToken(req.headers['x-callside-token'], token)) {
-      res.status(403).json({ error: 'Ungültige lokale Sitzung. Bitte Seite neu laden.' });
+      res.status(403).json({ error: 'Invalid local session. Reload the page.' });
       return;
     }
     if (req.method === 'POST' && !req.is('application/json')) {
-      res.status(415).json({ error: 'JSON erforderlich.' });
+      res.status(415).json({ error: 'JSON required.' });
       return;
     }
     next();
@@ -111,7 +112,7 @@ export async function startServer(options: ServerOptions = {}): Promise<RunningS
   app.post('/api/key', (req, res) => {
     const parsed = keySchema.safeParse(req.body);
     if (!parsed.success) {
-      res.status(400).json({ error: 'Ungültiger API-Key.' });
+      res.status(400).json({ error: 'Invalid API key.' });
       return;
     }
     inMemoryKey = parsed.data.apiKey;
@@ -127,7 +128,7 @@ export async function startServer(options: ServerOptions = {}): Promise<RunningS
       window.length >= (kind === 'answer' ? 60 : 120)
     ) {
       res.setHeader('Retry-After', '3');
-      res.status(429).json({ error: 'Zu viele gleichzeitige Anfragen. Bitte kurz warten.' });
+      res.status(429).json({ error: 'Too many concurrent requests. Wait a moment.' });
       return true;
     }
     window.push(now);
@@ -152,12 +153,12 @@ export async function startServer(options: ServerOptions = {}): Promise<RunningS
   app.post('/api/answer', async (req, res) => {
     const parsed = answerSchema.safeParse(req.body);
     if (!parsed.success) {
-      res.status(400).json({ error: 'Ungültige Einstellungen oder Gesprächsdaten.' });
+      res.status(400).json({ error: 'Invalid settings or conversation data.' });
       return;
     }
     const request = parsed.data;
     if (!request.demo && !getApiKey()) {
-      res.status(401).json({ error: 'Bitte zuerst einen OpenAI API-Key hinterlegen.' });
+      res.status(401).json({ error: 'Add an OpenAI API key first.' });
       return;
     }
     if (limited('answer', res)) return;
@@ -186,9 +187,7 @@ export async function startServer(options: ServerOptions = {}): Promise<RunningS
         if (event.type === 'delta') {
           outputSize += event.text.length;
           if (outputSize > 24000)
-            throw new PublicError(
-              'Die Antwort ist zu lang. Bitte einen kürzeren Prompt verwenden.',
-            );
+            throw new PublicError('The answer is too long. Use a shorter prompt.');
           const text = gate ? gate.push(event.text) : event.text;
           if (text) {
             send({ type: 'delta', text });
@@ -196,7 +195,7 @@ export async function startServer(options: ServerOptions = {}): Promise<RunningS
           }
         } else complete = true;
       }
-      if (!complete) throw new PublicError('Der Antwortstream wurde unerwartet unterbrochen.');
+      if (!complete) throw new PublicError('The answer stream ended unexpectedly.');
       const tail = gate?.finish();
       if (tail?.skip) send({ type: 'skip' });
       else {
@@ -205,9 +204,7 @@ export async function startServer(options: ServerOptions = {}): Promise<RunningS
           hasText = true;
         }
         if (!hasText)
-          throw new PublicError(
-            'Das Modell hat keine Textantwort geliefert. Bitte Modell oder Ausgabelimit prüfen.',
-          );
+          throw new PublicError('The model returned no text. Check the model or output limit.');
         send({ type: 'done' });
       }
     } catch (error) {
@@ -223,7 +220,7 @@ export async function startServer(options: ServerOptions = {}): Promise<RunningS
   app.post('/api/diarize', async (req, res) => {
     const parsed = diarizeSchema.safeParse(req.body);
     if (!parsed.success) {
-      res.status(400).json({ error: 'Ungültiger Audioabschnitt.' });
+      res.status(400).json({ error: 'Invalid audio chunk.' });
       return;
     }
     let audio: Buffer;
@@ -231,12 +228,12 @@ export async function startServer(options: ServerOptions = {}): Promise<RunningS
       audio = decodeWav(parsed.data.audio);
     } catch {
       res.status(400).json({
-        error: 'Ungültiges WAV-Audio. Erwartet: mono PCM16, 24 kHz, maximal 60 Sekunden.',
+        error: 'Invalid WAV audio. Expected mono PCM16, 24 kHz, up to 60 seconds.',
       });
       return;
     }
     if (!getApiKey()) {
-      res.status(401).json({ error: 'Bitte zuerst einen OpenAI API-Key hinterlegen.' });
+      res.status(401).json({ error: 'Add an OpenAI API key first.' });
       return;
     }
     if (limited('diarize', res)) return;
@@ -253,7 +250,7 @@ export async function startServer(options: ServerOptions = {}): Promise<RunningS
     }
   });
   app.use('/api', (_req, res) => {
-    res.status(404).json({ error: 'API-Endpunkt nicht gefunden.' });
+    res.status(404).json({ error: 'API endpoint not found.' });
   });
   app.use((error: unknown, _req: Request, res: Response, _next: NextFunction) => {
     if (res.headersSent) {
@@ -267,7 +264,7 @@ export async function startServer(options: ServerOptions = {}): Promise<RunningS
       error.type === 'entity.too.large';
     res
       .status(tooLarge ? 413 : 400)
-      .json({ error: tooLarge ? 'Anfrage zu groß.' : 'Ungültige Anfrage.' });
+      .json({ error: tooLarge ? 'Request too large.' : 'Invalid request.' });
   });
 
   const detachRealtime = attachRealtime(server, {
@@ -332,7 +329,7 @@ if (process.argv[1] && import.meta.url === pathToFileURL(resolve(process.argv[1]
     port,
     production: process.env.NODE_ENV === 'production' || import.meta.url.endsWith('.js'),
   });
-  console.log(`Callside läuft lokal: ${running.url}`);
+  console.log(`Callside is running locally: ${running.url}`);
   const shutdown = () => {
     void running.close().then(() => process.exit(0));
   };

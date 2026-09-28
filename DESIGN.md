@@ -136,7 +136,7 @@ The system is flat and restrained. Thin separators organize related controls; sm
 - Compact, separated transcript turns with speaker and time metadata.
 - Pale mint for the main action, active capture, and keyboard focus.
 - Visible capture state with an available stop action.
-- German interface copy and self-hosted typography.
+- English interface copy and self-hosted typography.
 
 ## Colors
 
@@ -239,7 +239,7 @@ Keyboard focus uses a 2px mint outline with 4px offset. The custom switch puts t
 - **Do** keep reply text visually dominant and comfortably spaced.
 - **Do** keep capture status and a stop action visible during an active session, including settings.
 - **Do** explain disabled configuration beside the affected controls.
-- **Do** pair state colors with plain German text.
+- **Do** pair state colors with plain English text.
 - **Do** preserve visible keyboard focus and reduced-motion behavior.
 - **Do** use the existing self-hosted font and consistent functional icons.
 

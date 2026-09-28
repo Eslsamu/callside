@@ -10,7 +10,7 @@ UI-entered keys live in server memory until the server process exits or the key 
 
 Session transcripts and suggestions stay in memory unless the user exports them. Exported JSON/Markdown are ordinary files containing conversation content. This application does not control their later storage, backups, or sharing. OpenAI processes submitted data under the API project's applicable policies; local memory handling does not determine provider-side retention.
 
-The optional **Vorlage speichern** action stores settings, prompts, and background context in the renderer's `localStorage`. It excludes keys, transcripts, and suggestions. This is ordinary local browser storage, not encrypted secret storage. **Zurücksetzen** removes the template. Take care when saving confidential context on a shared device.
+The optional **Save template** action stores settings, prompts, and background context in the renderer's `localStorage`. It excludes keys, transcripts, and suggestions. This is ordinary local browser storage, not encrypted secret storage. **Reset** removes the template. Take care when saving confidential context on a shared device.
 
 ## Local server boundary
 

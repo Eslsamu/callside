@@ -29,7 +29,7 @@ The local server owns the OpenAI key. The renderer obtains a process-scoped loca
 
 The AudioWorklet converts captured audio into the PCM format expected by transcription. Local speech boundary detection determines when to commit a live turn. The backend waits for the provider's session acknowledgement before allowing the client to send audio. Transcription events update entries by identity so partial text can become final without appending duplicates.
 
-Live mode distinguishes the selected sources, not every individual voice. The microphone label can be “Ich” and the shared audio label “Gegenüber.” Two remote participants are still one system source.
+Live mode distinguishes the selected sources, not every individual voice. The microphone label can be “Me” and the shared audio label “Other speaker.” Two remote participants are still one system source.
 
 Diarization mode uploads short WAV blocks to the diarization model. A returned speaker label is scoped to `{source, chunkId, speaker}`. Independent blocks do not provide reliable stable identity across a whole call. The UI must retain that distinction. Do not collapse all speakers named `A` into the same person across requests.
 
@@ -67,6 +67,6 @@ An answer-only provider can reuse OpenAI transcription. A transcription-only pro
 
 ## Persistence and hosting
 
-There is no database. Conversation state stays in the renderer's memory, and a UI-entered key stays in the server's memory. Export is the explicit persistence boundary for conversations. The separate **Vorlage speichern** action saves configuration, prompts, and context in `localStorage`, without keys or conversation contents. **Zurücksetzen** removes that template. A refresh or process restart can lose unsaved session state.
+There is no database. Conversation state stays in the renderer's memory, and a UI-entered key stays in the server's memory. Export is the explicit persistence boundary for conversations. The separate **Save template** action saves configuration, prompts, and context in `localStorage`, without keys or conversation contents. **Reset** removes that template. A refresh or process restart can lose unsaved session state.
 
 If adding persistence, make it opt-in, document what is stored, and define deletion and key handling first. If adding a hosted service, build user authentication and per-user isolation before exposing any of the local API routes. The local token is not a user authentication system.

@@ -1,3 +1,4 @@
+import { ANSWER_MODELS, reasoningOptions } from '../shared/models';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   Activity,
@@ -40,20 +41,20 @@ function loadSettings(): Settings {
   }
 }
 const presets = {
-  universal: { name: 'Universell', prompt: DEFAULT_SETTINGS.systemPrompt },
+  universal: { name: 'General', prompt: DEFAULT_SETTINGS.systemPrompt },
   sales: {
     name: 'Sales',
     prompt:
-      'Du begleitest mich in einem Verkaufsgespräch. Schlage eine kurze, hilfreiche Antwort auf die letzte Frage oder den letzten Einwand vor. Stelle bei unklaren Bedürfnissen eine offene Rückfrage. Erfinde keine Preise, Garantien, Referenzen oder Produktfähigkeiten. Nutze die Sprache des Gesprächs. Höchstens drei kurze Sätze.',
+      'You are helping me during a sales call. Suggest a short, useful answer to the latest question or objection. Ask an open question when needs are unclear. Do not invent prices, guarantees, references, or product capabilities. Use the language of the conversation. Use at most three short sentences.',
   },
   interview: {
     name: 'Interview',
     prompt:
-      'Du begleitest mich in einem Interview. Hilf mir, meine im Gesprächskontext angegebenen Erfahrungen klar zu formulieren. Erfinde keine Qualifikationen oder Erlebnisse. Fehlen konkrete Fakten, schlage eine Rückfrage oder eine Struktur vor. Nutze die Sprache des Gesprächs. Höchstens drei kurze Sätze.',
+      'You are helping me during an interview. Help me clearly describe the experience provided in the conversation context. Do not invent qualifications or experiences. When facts are missing, suggest a follow-up question or an answer structure. Use the language of the conversation. Use at most three short sentences.',
   },
 };
 const time = (value: number) =>
-  new Date(value).toLocaleTimeString('de-DE', {
+  new Date(value).toLocaleTimeString('en-GB', {
     hour: '2-digit',
     minute: '2-digit',
     second: '2-digit',
@@ -82,8 +83,8 @@ export default function App() {
   const [devices, setDevices] = useState<MediaDeviceInfo[]>([]);
   const [levels, setLevels] = useState<Record<Source, number>>({ mic: 0, system: 0 });
   const [sourceStatus, setSourceStatus] = useState<Record<Source, string>>({
-    mic: 'Bereit',
-    system: 'Bereit',
+    mic: 'Ready',
+    system: 'Ready',
   });
   const [copied, setCopied] = useState('');
   const captureRef = useRef<CaptureHandle | null>(null);
@@ -105,7 +106,7 @@ export default function App() {
     const abort = new AbortController();
     fetch('/api/bootstrap', { signal: abort.signal })
       .then(async (r) => {
-        if (!r.ok) throw new Error('Der lokale Server ist nicht erreichbar. Starte die App neu.');
+        if (!r.ok) throw new Error('The local server is unavailable. Restart the app.');
         setBootstrap(await r.json());
       })
       .catch((e) => {
@@ -117,7 +118,7 @@ export default function App() {
         shortcuts.current = Object.fromEntries(status.map((s) => [s.accelerator, s.registered]));
         if (status.some((s) => !s.registered))
           setNotice(
-            'Eine globale Taste ist bereits belegt. Nutze die andere Tastenkombination oder den Antwort-Button.',
+            'A global shortcut is already in use. Use the other shortcut or the answer button.',
           );
       })
       .catch(() => {});
@@ -216,7 +217,7 @@ export default function App() {
       setSuggestions((current) => current.map((s) => (s.id === id ? { ...s, status: 'done' } : s)));
     } catch (e) {
       if (!controller.signal.aborted && epoch === sessionEpoch.current) {
-        setError(e instanceof Error ? e.message : 'Antwort fehlgeschlagen. Versuche es erneut.');
+        setError(e instanceof Error ? e.message : 'The answer failed. Try again.');
         setSuggestions((current) =>
           current.map((s) => (s.id === id ? { ...s, status: 'error' } : s)),
         );
@@ -287,11 +288,11 @@ export default function App() {
     try {
       await capture?.stop();
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Aufnahme konnte nicht sauber beendet werden.');
+      setError(e instanceof Error ? e.message : 'Recording could not finish cleanly.');
     } finally {
       setStopping(false);
       setLevels({ mic: 0, system: 0 });
-      setSourceStatus({ mic: 'Beendet', system: 'Beendet' });
+      setSourceStatus({ mic: 'Ended', system: 'Ended' });
     }
   }
 
@@ -337,23 +338,23 @@ export default function App() {
   async function start() {
     if (!bootstrap?.hasApiKey) {
       setView('settings');
-      setNotice('Hinterlege zuerst einen OpenAI API-Key.');
+      setNotice('Add an OpenAI API key first.');
       return;
     }
     if (!consent) {
-      setError('Bestätige vor dem Start, dass alle Beteiligten von der Transkription wissen.');
+      setError('Confirm that everyone knows about transcription before starting.');
       return;
     }
     if (!settings.captureMic && !settings.captureSystem) {
-      setError('Wähle mindestens eine Audioquelle in den Einstellungen.');
+      setError('Select at least one audio source in Settings.');
       return;
     }
     reset();
     setDemo(false);
     setStarting(true);
     setSourceStatus({
-      mic: settings.captureMic ? 'Verbindet …' : 'Aus',
-      system: settings.captureSystem ? 'Verbindet …' : 'Aus',
+      mic: settings.captureMic ? 'Connecting …' : 'Off',
+      system: settings.captureSystem ? 'Connecting …' : 'Off',
     });
     try {
       const epoch = sessionEpoch.current;
@@ -371,8 +372,8 @@ export default function App() {
           onStatus: (source, status) => {
             if (epoch !== sessionEpoch.current) return;
             setSourceStatus((current) => ({ ...current, [source]: status }));
-            if (status.startsWith('Noch kein Audiosignal'))
-              setNotice(`${source === 'mic' ? 'Mikrofon' : 'Call-Audio'}: ${status}.`);
+            if (status.startsWith('No audio signal yet'))
+              setNotice(`${source === 'mic' ? 'Microphone' : 'Call audio'}: ${status}.`);
           },
           onError: (message) => {
             if (epoch === sessionEpoch.current) setError(message);
@@ -392,9 +393,7 @@ export default function App() {
       setView('session');
     } catch (e) {
       setError(
-        e instanceof Error
-          ? e.message
-          : 'Die Aufnahme konnte nicht starten. Prüfe deine Audiofreigaben.',
+        e instanceof Error ? e.message : 'Recording could not start. Check your audio permissions.',
       );
     } finally {
       setStarting(false);
@@ -412,12 +411,12 @@ export default function App() {
         body: JSON.stringify({ apiKey: apiKey.trim() }),
       });
       const data = await response.json();
-      if (!response.ok) throw new Error(data.error || 'Der Key konnte nicht übernommen werden.');
+      if (!response.ok) throw new Error(data.error || 'Could not apply the key.');
       setBootstrap({ ...bootstrap, hasApiKey: data.hasApiKey });
       setApiKey('');
-      setNotice('Key für diese Sitzung hinterlegt. Er wird beim ersten API-Aufruf geprüft.');
+      setNotice('Key added for this session. It will be validated on the first API request.');
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Key konnte nicht übernommen werden.');
+      setError(e instanceof Error ? e.message : 'Could not apply the key.');
     } finally {
       setKeyBusy(false);
     }
@@ -435,9 +434,7 @@ export default function App() {
         ),
       );
     } catch {
-      setError(
-        'Audioeingänge nicht verfügbar. Erlaube den Mikrofonzugriff in den Systemeinstellungen.',
-      );
+      setError('Audio inputs are unavailable. Allow microphone access in system settings.');
     }
   }
   function download(format: 'json' | 'md') {
@@ -472,9 +469,7 @@ export default function App() {
       setCopied(suggestion.id);
       setTimeout(() => setCopied(''), 1800);
     } catch {
-      setError(
-        'Kopieren wurde blockiert. Markiere den Antworttext und kopiere ihn mit der Tastatur.',
-      );
+      setError('Copying was blocked. Select the answer text and copy it with your keyboard.');
     }
   }
   const current = suggestions.at(-1);
@@ -493,40 +488,40 @@ export default function App() {
             e.preventDefault();
             setView('session');
           }}
-          aria-label="Callside Gespräch"
+          aria-label="Callside conversation"
         >
           <Radio size={25} />
           <span>
             callside<span className="brand-period">.</span>
           </span>
         </a>
-        <nav aria-label="Hauptnavigation">
+        <nav aria-label="Main navigation">
           <button
             className={view === 'session' ? 'nav-button active' : 'nav-button'}
             onClick={() => setView('session')}
           >
-            Gespräch
+            Conversation
           </button>
           <button
             className={view === 'settings' ? 'nav-button active' : 'nav-button'}
             onClick={() => setView('settings')}
           >
             <Settings2 size={15} />
-            Einstellungen
+            Settings
           </button>
         </nav>
         <div className="header-right">
           {window.callsideDesktop && (
             <button
               className={`icon-button ${pin ? 'selected' : ''}`}
-              aria-label="Fenster im Vordergrund halten"
+              aria-label="Keep window on top"
               aria-pressed={pin}
               onClick={async () => {
                 try {
                   await window.callsideDesktop!.setAlwaysOnTop(!pin);
                   setPin(!pin);
                 } catch {
-                  setError('Das Fenster konnte nicht angeheftet werden.');
+                  setError('Could not pin the window.');
                 }
               }}
             >
@@ -534,7 +529,7 @@ export default function App() {
             </button>
           )}
           <span className="local-badge">
-            <span className="small-dot" /> Lokal auf deinem Gerät
+            <span className="small-dot" /> Local on your device
           </span>
         </div>
       </header>
@@ -542,7 +537,7 @@ export default function App() {
       {error && (
         <div className="message error" role="alert">
           <span>{error}</span>
-          <button aria-label="Fehlermeldung schließen" onClick={() => setError('')}>
+          <button aria-label="Dismiss error" onClick={() => setError('')}>
             <X size={17} />
           </button>
         </div>
@@ -550,7 +545,7 @@ export default function App() {
       {notice && (
         <div className="message notice" role="status">
           <span>{notice}</span>
-          <button aria-label="Hinweis schließen" onClick={() => setNotice('')}>
+          <button aria-label="Dismiss notice" onClick={() => setNotice('')}>
             <X size={17} />
           </button>
         </div>
@@ -558,10 +553,10 @@ export default function App() {
 
       {view === 'session' ? (
         <main className="session-view">
-          <section className="session-top" aria-label="Aufnahmesteuerung">
+          <section className="session-top" aria-label="Recording controls">
             <div className="session-heading">
-              <h1>Raum für dein Gespräch.</h1>
-              <p>Hör zu. Bleib im Moment. Die nächste Antwort ist schon da.</p>
+              <h1>Room for your conversation.</h1>
+              <p>Listen. Stay present. Find your next words here.</p>
             </div>
             <div className="session-actions">
               {!live && entries.length > 0 && (
@@ -572,13 +567,13 @@ export default function App() {
                     setDemo(false);
                   }}
                 >
-                  Neue Sitzung
+                  New session
                 </button>
               )}
               {listening ? (
                 <button className="stop-button" onClick={() => void stop()}>
                   <Square size={14} fill="currentColor" />
-                  {demo ? 'Demo beenden' : 'Call beenden'}
+                  {demo ? 'End demo' : 'End call'}
                 </button>
               ) : (
                 <button
@@ -587,7 +582,7 @@ export default function App() {
                   onClick={() => void start()}
                 >
                   <Mic size={17} />
-                  {starting ? 'Verbindet …' : stopping ? 'Schließt ab …' : 'Call starten'}
+                  {starting ? 'Connecting …' : stopping ? 'Finishing …' : 'Start call'}
                 </button>
               )}
             </div>
@@ -596,10 +591,10 @@ export default function App() {
             <div className="capture-state">
               <span className={`status-dot ${listening ? 'live' : ''}`} />
               {demo
-                ? 'Demo · synthetisches Gespräch'
+                ? 'Demo · synthetic conversation'
                 : listening
-                  ? 'Transkription läuft'
-                  : 'Bereit, wenn du es bist'}
+                  ? 'Transcribing'
+                  : 'Ready when you are'}
               <span className="timer">{minutes}</span>
             </div>
             {!live && (
@@ -609,16 +604,16 @@ export default function App() {
                   checked={consent}
                   onChange={(e) => setConsent(e.target.checked)}
                 />
-                Alle Beteiligten wissen von der Transkription.
+                Everyone knows about transcription.
               </label>
             )}
             {live && (
               <span className="mode-label">
                 {demo
-                  ? 'Ohne API-Kosten'
+                  ? 'No API costs'
                   : settings.captureMode === 'realtime'
-                    ? 'Live · getrennte Audiokanäle'
-                    : `Sprechererkennung · ${settings.diarizationChunkSeconds}-Sekunden-Blöcke`}
+                    ? 'Live · separate audio channels'
+                    : `Speaker identification · ${settings.diarizationChunkSeconds}-second chunks`}
               </span>
             )}
           </div>
@@ -626,10 +621,8 @@ export default function App() {
           <div className="workspace">
             <section className="transcript-pane" aria-labelledby="transcript-title">
               <div className="pane-header">
-                <h2 id="transcript-title">Live-Transkript</h2>
-                <span className="count-label">
-                  {entries.filter((e) => e.final).length} Beiträge
-                </span>
+                <h2 id="transcript-title">Live transcript</h2>
+                <span className="count-label">{entries.filter((e) => e.final).length} turns</span>
               </div>
               <div className="source-strip">
                 {(['mic', 'system'] as Source[]).map((source) => (
@@ -639,7 +632,7 @@ export default function App() {
                     <div
                       className="level-meter"
                       role="meter"
-                      aria-label={`${source === 'mic' ? 'Mikrofon' : 'Call'}-Pegel`}
+                      aria-label={`${source === 'mic' ? 'Microphone' : 'Call'} level`}
                       aria-valuemin={0}
                       aria-valuemax={100}
                       aria-valuenow={Math.round(levels[source] * 100)}
@@ -662,20 +655,22 @@ export default function App() {
                     <div className="empty-wave">
                       <Activity size={42} strokeWidth={1.2} />
                     </div>
-                    <h3>Hier wird dein Gespräch sichtbar.</h3>
+                    <h3>Your conversation appears here.</h3>
                     <p>
-                      Mikrofon und Call-Audio werden live transkribiert. Du siehst, was gesagt wird,
-                      während du zuhörst.
+                      Your microphone and call audio are transcribed live. Follow what is being said
+                      as you listen.
                     </p>
                     <button
                       className="text-button"
                       disabled={live || !bootstrap}
                       onClick={startDemo}
                     >
-                      Demo ausprobieren
+                      Try demo
                       <ArrowRight size={16} />
                     </button>
-                    <span className="small-print">Kein Key, kein Mikrofon. Nur ein Beispiel.</span>
+                    <span className="small-print">
+                      A sample conversation. No key or microphone needed.
+                    </span>
                   </div>
                 ) : (
                   entries.map((entry) => (
@@ -699,18 +694,18 @@ export default function App() {
               </div>
               <div className="transcript-footer">
                 <Headphones size={14} />
-                <span>Kopfhörer vermeiden doppelte Transkription.</span>
+                <span>Use headphones to avoid duplicate transcription.</span>
                 <details className="export-menu">
-                  <summary aria-label="Sitzung exportieren">
+                  <summary aria-label="Export session">
                     <Download size={16} />
                     <ChevronDown size={13} />
                   </summary>
                   <div>
                     <button disabled={!entries.length} onClick={() => download('md')}>
-                      Transkript als Markdown
+                      Transcript as Markdown
                     </button>
                     <button disabled={!entries.length} onClick={() => download('json')}>
-                      Sitzung als JSON
+                      Session as JSON
                     </button>
                   </div>
                 </details>
@@ -719,20 +714,20 @@ export default function App() {
 
             <section className="assistant-pane" aria-labelledby="assistant-title">
               <div className="pane-header">
-                <h2 id="assistant-title">Dein nächster Gedanke</h2>
+                <h2 id="assistant-title">Your next thought</h2>
                 <span className="model-label">{settings.model}</span>
               </div>
               <label className="auto-control">
                 <span>
                   <Zap size={16} />
                   <span>
-                    Automatische Hinweise<small>Das Modell entscheidet, wann es hilft.</small>
+                    Automatic hints<small>The model decides when to help.</small>
                   </span>
                 </span>
                 <input
                   type="checkbox"
                   role="switch"
-                  aria-label="Automatische Hinweise"
+                  aria-label="Automatic hints"
                   checked={auto}
                   onChange={(e) => setAuto(e.target.checked)}
                 />
@@ -744,10 +739,10 @@ export default function App() {
                     <div className="suggestion-meta">
                       <span>
                         {current.mode === 'auto'
-                          ? 'Automatischer Hinweis'
+                          ? 'Automatic hint'
                           : current.question
-                            ? 'Deine Frage'
-                            : 'Antwortvorschlag'}
+                            ? 'Your question'
+                            : 'Answer suggestion'}
                       </span>
                       <time>{time(current.timestamp)}</time>
                     </div>
@@ -761,14 +756,14 @@ export default function App() {
                     <div className="suggestion-bottom">
                       <span>
                         {current.status === 'streaming'
-                          ? 'Wird formuliert …'
+                          ? 'Drafting …'
                           : current.status === 'error'
-                            ? 'Unvollständige Antwort'
-                            : 'Als Formulierungshilfe gedacht.'}
+                            ? 'Incomplete answer'
+                            : 'A suggestion to put in your own words.'}
                       </span>
                       <button
                         className="icon-button"
-                        aria-label="Antwort kopieren"
+                        aria-label="Copy answer"
                         onClick={() => void copy(current)}
                       >
                         {copied === current.id ? <Check size={17} /> : <Copy size={17} />}
@@ -779,17 +774,14 @@ export default function App() {
                   <div className="empty-answer">
                     <span className="answer-mark">“</span>
                     <h3>
-                      Die richtigen Worte.
+                      The right words.
                       <br />
-                      Wenn du sie brauchst.
+                      When you need them.
                     </h3>
-                    <p>
-                      Ein Tastendruck genügt. Dein Assistent greift das Gespräch auf und schlägt dir
-                      eine kurze Antwort vor.
-                    </p>
+                    <p>Press a key to get a short answer suggestion based on the conversation.</p>
                     <div className="shortcut-demo">
                       <kbd>F8</kbd>
-                      <span>oder den Button unten nutzen</span>
+                      <span>or use the button below</span>
                     </div>
                   </div>
                 )}
@@ -797,14 +789,14 @@ export default function App() {
                   <p className="thinking">
                     <span className="status-dot live" />
                     {activeMode.current === 'auto'
-                      ? 'Prüft, ob ein Hinweis hilft …'
-                      : 'Formuliert eine Antwort …'}
+                      ? 'Checking whether a hint would help …'
+                      : 'Drafting an answer …'}
                   </p>
                 )}
               </div>
               {suggestions.length > 1 && (
                 <details className="history">
-                  <summary>{suggestions.length - 1} frühere Vorschläge</summary>
+                  <summary>{suggestions.length - 1} previous suggestions</summary>
                   <div>
                     {suggestions
                       .slice(0, -1)
@@ -825,7 +817,7 @@ export default function App() {
                   onClick={() => void requestAnswer('manual')}
                 >
                   <Zap size={18} />
-                  {busy ? 'Denkt mit …' : 'Antwort vorschlagen'}
+                  {busy ? 'Thinking …' : 'Suggest answer'}
                   <kbd>F8</kbd>
                 </button>
                 <form
@@ -838,15 +830,15 @@ export default function App() {
                   }}
                 >
                   <input
-                    aria-label="Eigene Frage"
+                    aria-label="Your question"
                     value={question}
                     onChange={(e) => setQuestion(e.target.value)}
-                    placeholder="Oder eine eigene Frage stellen …"
+                    placeholder="Or ask your own question …"
                     maxLength={4000}
                   />
                   <button
                     type="submit"
-                    aria-label="Frage senden"
+                    aria-label="Send question"
                     disabled={!question.trim() || busy || !bootstrap}
                   >
                     <ArrowRight size={18} />
@@ -855,68 +847,66 @@ export default function App() {
                 <span className="shortcut-hint">
                   <Keyboard size={13} />
                   {window.callsideDesktop
-                    ? 'Global: F8 oder ⌘ / Strg + Umschalt + Leertaste'
-                    : 'F8 im Browser · globale Taste in der Desktop-App'}
+                    ? 'Global: F8 or ⌘ / Ctrl + Shift + Space'
+                    : 'F8 in the browser · global shortcut in the desktop app'}
                 </span>
               </div>
             </section>
           </div>
           <footer className="page-footer">
             <span>
-              {demo
-                ? 'Demo-Daten · keine Audioaufnahme'
-                : 'Audio an OpenAI · keine lokale Aufzeichnung'}
-              <span className="footer-divider">/</span>Transkript nur in dieser Sitzung
+              {demo ? 'Demo data · no audio recorded' : 'Audio sent to OpenAI · no local recording'}
+              <span className="footer-divider">/</span>Transcript kept in this session only
             </span>
-            <span>Open source. Dein Workflow.</span>
+            <span>Open source. Your workflow.</span>
           </footer>
         </main>
       ) : (
         <main className="settings-view">
           {live && (
-            <section className="settings-session-state" aria-label="Aktive Sitzung">
+            <section className="settings-session-state" aria-label="Active session">
               <div className="capture-state">
                 <span className={`status-dot ${listening ? 'live' : ''}`} />
                 <span>
                   {starting
-                    ? 'Audio wird verbunden …'
+                    ? 'Connecting audio …'
                     : stopping
-                      ? 'Transkript wird abgeschlossen …'
+                      ? 'Finalizing transcript …'
                       : demo
-                        ? 'Demo läuft · synthetisches Gespräch'
-                        : 'Transkription läuft weiter'}
+                        ? 'Demo running · synthetic conversation'
+                        : 'Transcription continues'}
                 </span>
                 <span className="timer">{minutes}</span>
               </div>
               <button className="stop-button" disabled={!listening} onClick={() => void stop()}>
                 <Square size={14} fill="currentColor" />
-                {demo ? 'Demo beenden' : 'Call beenden'}
+                {demo ? 'End demo' : 'End call'}
               </button>
             </section>
           )}
           <div className="settings-heading">
             <div>
-              <h1>Für dein Gespräch eingerichtet.</h1>
-              <p>Audio, Modell und Anweisungen an einem Ort.</p>
+              <h1>Set up for your conversation.</h1>
+              <p>Audio, models, and instructions in one place.</p>
             </div>
             <button className="quiet-button" onClick={() => setView('session')}>
-              Zurück zum Gespräch
+              Back to conversation
               <ArrowRight size={16} />
             </button>
           </div>
           <div className="settings-grid">
             <section className="settings-section">
-              <h2>OpenAI verbinden</h2>
+              <h2>Connect OpenAI</h2>
               <p>
-                API-Nutzung wird separat abgerechnet. Ein ChatGPT-Abo stellt keinen allgemeinen
-                Audio-API-Zugang bereit.
+                API usage is billed separately. A ChatGPT subscription does not include general
+                audio API access.
               </p>
               <div className="key-state">
                 <span className={`status-dot ${bootstrap?.hasApiKey ? 'live' : ''}`} />
-                {bootstrap?.hasApiKey ? 'API-Key hinterlegt' : 'Noch kein API-Key hinterlegt'}
+                {bootstrap?.hasApiKey ? 'API key added' : 'No API key added'}
               </div>
               <label>
-                OpenAI API-Key
+                OpenAI API key
                 <input
                   type="password"
                   autoComplete="off"
@@ -930,54 +920,96 @@ export default function App() {
                 disabled={!apiKey.trim() || keyBusy || !bootstrap || live}
                 onClick={() => void saveKey()}
               >
-                {keyBusy ? 'Übernimmt …' : 'Key für diese Sitzung verwenden'}
+                {keyBusy ? 'Applying …' : 'Use key for this session'}
               </button>
               <p className="field-help">
-                Der Key bleibt im Arbeitsspeicher des lokalen Servers. Alternativ: OPENAI_API_KEY in
-                der lokalen .env-Datei.
+                The key stays in local server memory. Alternatively, set OPENAI_API_KEY in your
+                local .env file.
               </p>
             </section>
             <section className="settings-section">
-              <h2>Modell & Sprache</h2>
+              <h2>Model & language</h2>
               <label>
-                Antwortmodell
-                <input
-                  list="models"
+                Answer model
+                <select
                   value={settings.model}
-                  onChange={(e) => update('model', e.target.value)}
-                  maxLength={100}
-                />
-                <datalist id="models">
-                  {(bootstrap?.models || ['gpt-4.1-mini', 'gpt-4.1', 'gpt-5-mini']).map((model) => (
-                    <option key={model} value={model} />
+                  onChange={(e) =>
+                    setSettings((current) =>
+                      safeSettings({ ...current, model: e.target.value }, DEFAULT_SETTINGS),
+                    )
+                  }
+                >
+                  {ANSWER_MODELS.map((model) => (
+                    <option key={model} value={model}>
+                      {model
+                        .replace('gpt-6-', 'GPT-6 ')
+                        .replace(
+                          /\b(luna|sol|astra)\b/g,
+                          (name) => name[0].toUpperCase() + name.slice(1),
+                        )}
+                    </option>
                   ))}
-                </datalist>
+                </select>
+              </label>
+              <p className="field-help">Availability depends on your OpenAI project and account.</p>
+              <label>
+                Reasoning strength
+                <select
+                  value={settings.reasoningEffort}
+                  onChange={(e) =>
+                    update('reasoningEffort', e.target.value as Settings['reasoningEffort'])
+                  }
+                >
+                  {reasoningOptions(settings.model).map((effort) => (
+                    <option key={effort} value={effort}>
+                      {
+                        {
+                          none: 'None',
+                          low: 'Low',
+                          medium: 'Medium',
+                          high: 'High',
+                          xhigh: 'Extra high',
+                          max: 'Maximum',
+                        }[effort]
+                      }
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label className="checkbox-label">
+                <input
+                  type="checkbox"
+                  checked={settings.fastMode}
+                  onChange={(e) => update('fastMode', e.target.checked)}
+                />
+                Fast mode
               </label>
               <p className="field-help">
-                Eine Responses-API-Modell-ID aus deinem OpenAI-Projekt. Verfügbarkeit hängt von
-                deinem Account ab.
+                Fast requests priority processing at 2× standard token rates, where available.
+                Higher reasoning can increase response time and token use. The token budget includes
+                reasoning and the visible answer.
               </p>
               <div className="field-row">
                 <label>
-                  Sprache
+                  Language
                   <select
                     value={settings.language}
                     disabled={live}
                     onChange={(e) => update('language', e.target.value)}
                   >
-                    <option value="de">Deutsch</option>
-                    <option value="en">Englisch</option>
-                    <option value="">Automatisch</option>
-                    <option value="es">Spanisch</option>
-                    <option value="fr">Französisch</option>
+                    <option value="de">German</option>
+                    <option value="en">English</option>
+                    <option value="">Automatic</option>
+                    <option value="es">Spanish</option>
+                    <option value="fr">French</option>
                   </select>
                 </label>
                 <label>
-                  Max. Antwort-Tokens
+                  Reasoning and answer token budget
                   <input
                     type="number"
                     min={64}
-                    max={2000}
+                    max={32768}
                     value={settings.maxOutputTokens}
                     onChange={(e) => update('maxOutputTokens', Number(e.target.value))}
                   />
@@ -985,16 +1017,16 @@ export default function App() {
               </div>
             </section>
             <section className="settings-section audio-settings">
-              <h2>Audioquellen</h2>
+              <h2>Audio sources</h2>
               {live && (
                 <p className="audio-lock-note">
-                  Die Audioeinstellungen sind während der Sitzung gesperrt. Beende die Sitzung, um
-                  die Quellen oder den Transkriptionsmodus zu ändern.
+                  Audio settings are locked during a session. End the session to change sources or
+                  transcription mode.
                 </p>
               )}
               <p>
-                Für einen Call: dein Mikrofon plus das Audio des Gesprächs. Die Auswahl erfolgt beim
-                Start.
+                For a call, use your microphone and the call audio. Select sharing options when you
+                start.
               </p>
               <fieldset disabled={live}>
                 <label className="checkbox-label">
@@ -1003,11 +1035,11 @@ export default function App() {
                     checked={settings.captureMic}
                     onChange={(e) => update('captureMic', e.target.checked)}
                   />
-                  Mikrofon transkribieren
+                  Transcribe microphone
                 </label>
                 <div className="field-row">
                   <label>
-                    Name deiner Spur
+                    Your track label
                     <input
                       value={settings.micLabel}
                       maxLength={60}
@@ -1015,12 +1047,12 @@ export default function App() {
                     />
                   </label>
                   <label>
-                    Mikrofon
+                    Microphone
                     <select
                       value={settings.micDeviceId}
                       onChange={(e) => update('micDeviceId', e.target.value)}
                     >
-                      <option value="">Standardmikrofon</option>
+                      <option value="">Default microphone</option>
                       {devices.map((d) => (
                         <option key={d.deviceId} value={d.deviceId}>
                           {d.label}
@@ -1035,11 +1067,11 @@ export default function App() {
                     checked={settings.captureSystem}
                     onChange={(e) => update('captureSystem', e.target.checked)}
                   />
-                  Call-Audio transkribieren
+                  Transcribe call audio
                 </label>
                 <div className="field-row">
                   <label>
-                    Name der Call-Spur
+                    Call track label
                     <input
                       value={settings.systemLabel}
                       maxLength={60}
@@ -1047,12 +1079,12 @@ export default function App() {
                     />
                   </label>
                   <label>
-                    Call-Audioquelle
+                    Call audio source
                     <select
                       value={settings.systemDeviceId}
                       onChange={(e) => update('systemDeviceId', e.target.value)}
                     >
-                      <option value="">System / geteiltes Tab</option>
+                      <option value="">System / shared tab</option>
                       {devices.map((d) => (
                         <option key={d.deviceId} value={d.deviceId}>
                           {d.label}
@@ -1062,29 +1094,29 @@ export default function App() {
                   </label>
                 </div>
                 <button className="text-button" onClick={() => void discoverDevices()}>
-                  Audioeingänge laden
+                  Load audio inputs
                   <Mic size={15} />
                 </button>
                 <p className="field-help">
-                  Ein virtueller Audioeingang kann Systemaudio ersetzen, wenn dein Betriebssystem es
-                  nicht direkt freigibt. Kopfhörer empfohlen.
+                  A virtual audio input can replace system audio when your operating system cannot
+                  share it directly. Headphones are recommended.
                 </p>
                 <label>
-                  Transkriptionsmodus
+                  Transcription mode
                   <select
                     value={settings.captureMode}
                     onChange={(e) =>
                       update('captureMode', e.target.value as Settings['captureMode'])
                     }
                   >
-                    <option value="realtime">Schnell: getrennte Live-Kanäle</option>
-                    <option value="diarized">Sprechererkennung in Audioblöcken</option>
+                    <option value="realtime">Fast: separate live channels</option>
+                    <option value="diarized">Speaker identification in audio chunks</option>
                   </select>
                 </label>
                 {settings.captureMode === 'realtime' ? (
                   <>
                     <label>
-                      Transkriptionsmodell
+                      Transcription model
                       <select
                         value={settings.transcriptionModel}
                         onChange={(e) => update('transcriptionModel', e.target.value)}
@@ -1095,14 +1127,14 @@ export default function App() {
                       </select>
                     </label>
                     <p className="field-help">
-                      „Ich“ und „Gegenüber“ werden anhand der Audioquelle zugeordnet. Mehrere
-                      Stimmen im Call werden hier nicht getrennt erkannt.
+                      Me and Other speaker are assigned by audio source. Multiple voices on the call
+                      are not identified separately in this mode.
                     </p>
                   </>
                 ) : (
                   <>
                     <label>
-                      Blocklänge in Sekunden
+                      Chunk length in seconds
                       <input
                         type="number"
                         min={4}
@@ -1112,16 +1144,15 @@ export default function App() {
                       />
                     </label>
                     <p className="field-help">
-                      gpt-4o-transcribe-diarize erkennt Sprecher innerhalb jedes Blocks. Die Kennung
-                      ist über Blockgrenzen nicht stabil. Ergebnisse erscheinen mit zusätzlicher
-                      Verzögerung.
+                      gpt-4o-transcribe-diarize identifies speakers within each chunk. Speaker IDs
+                      are not stable across chunks. Results arrive with additional delay.
                     </p>
                   </>
                 )}
               </fieldset>
             </section>
             <section className="settings-section prompt-settings">
-              <h2>So soll dein Assistent helfen</h2>
+              <h2>How your assistant should help</h2>
               <div className="preset-buttons">
                 {Object.entries(presets).map(([id, preset]) => (
                   <button
@@ -1134,7 +1165,7 @@ export default function App() {
                 ))}
               </div>
               <label>
-                System-Prompt
+                System prompt
                 <textarea
                   rows={5}
                   value={settings.systemPrompt}
@@ -1143,17 +1174,17 @@ export default function App() {
                 />
               </label>
               <label>
-                Gesprächskontext
+                Conversation context
                 <textarea
                   rows={4}
                   value={settings.context}
                   maxLength={16000}
-                  placeholder="Worum geht es? Was sollte das Modell wissen? Zum Beispiel: Angebot, Ziele, Hintergrund und Fakten."
+                  placeholder="What is the call about? Add the offer, goals, background, and facts the model should know."
                   onChange={(e) => update('context', e.target.value)}
                 />
               </label>
               <label>
-                Automatik-Prompt
+                Automatic mode prompt
                 <textarea
                   rows={4}
                   value={settings.autoPrompt}
@@ -1162,7 +1193,7 @@ export default function App() {
                 />
               </label>
               <label>
-                Mindestabstand automatischer Prüfungen (Sekunden)
+                Minimum interval between automatic checks (seconds)
                 <input
                   type="number"
                   min={3}
@@ -1172,15 +1203,15 @@ export default function App() {
                 />
               </label>
               <p className="field-help">
-                Nach neuen Beiträgen der Call-Spur entscheidet das Modell anhand dieses Prompts, ob
-                ein Vorschlag sinnvoll ist. Auch Prüfungen ohne Hinweis verbrauchen API-Tokens.
+                After new call audio turns, the model uses this prompt to decide whether a
+                suggestion would help. Checks that produce no hint also consume API tokens.
               </p>
             </section>
           </div>
           <div className="settings-bottom">
             <p>
-              Änderungen gelten sofort. Eine gespeicherte Vorlage enthält Prompts und Kontext auf
-              diesem Gerät, keine Keys oder Transkripte.
+              Changes apply immediately. Saving a template stores prompts and context on this
+              device, without keys or transcripts.
             </p>
             <button
               className="secondary-button"
@@ -1190,13 +1221,13 @@ export default function App() {
                     settingsKey,
                     JSON.stringify(safeSettings(settings, DEFAULT_SETTINGS)),
                   );
-                  setNotice('Vorlage auf diesem Gerät gespeichert.');
+                  setNotice('Template saved on this device.');
                 } catch {
-                  setError('Vorlage konnte nicht gespeichert werden.');
+                  setError('Could not save the template.');
                 }
               }}
             >
-              Vorlage speichern
+              Save template
             </button>
             <button
               className="quiet-button"
@@ -1204,10 +1235,10 @@ export default function App() {
               onClick={() => {
                 localStorage.removeItem(settingsKey);
                 setSettings({ ...DEFAULT_SETTINGS });
-                setNotice('Einstellungen zurückgesetzt und gespeicherte Vorlage entfernt.');
+                setNotice('Settings reset and saved template removed.');
               }}
             >
-              Zurücksetzen
+              Reset
             </button>
           </div>
         </main>

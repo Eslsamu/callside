@@ -43,13 +43,22 @@ describe('OpenAI provider contract (no upstream network)', () => {
     const provider = new OpenAIProvider('not-a-real-key');
     const received = [];
     for await (const event of provider.answer(
-      { model: 'gpt-4.1-mini', instructions: 'Help', input: '{}', maxOutputTokens: 300 },
+      {
+        model: 'gpt-6-luna',
+        reasoningEffort: 'none',
+        fastMode: false,
+        instructions: 'Help',
+        input: '{}',
+        maxOutputTokens: 300,
+      },
       signal,
     ))
       received.push(event);
     expect(mocked.responses).toHaveBeenLastCalledWith(
       {
-        model: 'gpt-4.1-mini',
+        model: 'gpt-6-luna',
+        reasoning: { effort: 'none' },
+        service_tier: 'default',
         instructions: 'Help',
         input: '{}',
         max_output_tokens: 300,
@@ -70,17 +79,24 @@ describe('OpenAI provider contract (no upstream network)', () => {
     await expect(
       (async () => {
         for await (const _ of provider.answer(
-          { model: 'gpt-4.1-mini', instructions: '', input: '', maxOutputTokens: 64 },
+          {
+            model: 'gpt-6-luna',
+            reasoningEffort: 'none',
+            fastMode: false,
+            instructions: '',
+            input: '',
+            maxOutputTokens: 64,
+          },
           new AbortController().signal,
         )) {
           /* consume */
         }
       })(),
-    ).rejects.toThrow('Ausgabelimit');
+    ).rejects.toThrow('output limit');
   });
   it('sends diarized_json and scopes each speaker to its source and independent chunk', async () => {
     mocked.transcriptions.mockResolvedValue({
-      segments: [{ speaker: 'A', text: ' Guten Tag ', start: 1.25 }],
+      segments: [{ speaker: 'A', text: ' Good morning ', start: 1.25 }],
     });
     const provider = new OpenAIProvider('not-a-real-key');
     const signal = new AbortController().signal;
@@ -106,7 +122,7 @@ describe('OpenAI provider contract (no upstream network)', () => {
         id: 'system:one:0',
         source: 'system',
         speaker: 'system:one:A',
-        text: 'Guten Tag',
+        text: 'Good morning',
         timestamp: 11250,
         final: true,
       },
@@ -118,7 +134,59 @@ describe('OpenAI provider contract (no upstream network)', () => {
     expect(decodeWav(wav().toString('base64')).length).toBe(4844);
     const invalid = wav();
     invalid.writeUInt16LE(3, 20);
-    expect(() => decodeWav(invalid.toString('base64'))).toThrow('Ungültiges Audio');
+    expect(() => decodeWav(invalid.toString('base64'))).toThrow('Invalid audio');
     expect(() => decodeWav(Buffer.from('RIFFnot-a-valid-wav').toString('base64'))).toThrow();
   });
+});
+
+describe('GPT-6 model parameters', () => {
+  it.each(['gpt-6-luna', 'gpt-6-sol', 'gpt-6-astra'])(
+    'sends reasoning and Fast parameters for %s',
+    async (model) => {
+      mocked.responses.mockResolvedValue(
+        (async function* () {
+          yield { type: 'response.completed' };
+        })(),
+      );
+      const provider = new OpenAIProvider('not-a-real-key');
+      for await (const _ of provider.answer(
+        {
+          model,
+          reasoningEffort: 'high',
+          fastMode: true,
+          instructions: 'Help',
+          input: '{}',
+          maxOutputTokens: 4096,
+        },
+        new AbortController().signal,
+      )) {
+        /* consume */
+      }
+      expect(mocked.responses).toHaveBeenLastCalledWith(
+        expect.objectContaining({
+          model,
+          reasoning: { effort: 'high' },
+          service_tier: 'priority',
+          max_output_tokens: 4096,
+        }),
+        expect.anything(),
+      );
+    },
+  );
+});
+
+import { settingsSchema } from '../server/validation.js';
+import { DEFAULT_SETTINGS } from '../shared/defaults.js';
+it('rejects unsupported answer models and Astra without reasoning before provider use', () => {
+  expect(settingsSchema.safeParse({ ...DEFAULT_SETTINGS, model: 'retired-model' }).success).toBe(
+    false,
+  );
+  expect(
+    settingsSchema.safeParse({ ...DEFAULT_SETTINGS, model: 'gpt-6-astra', reasoningEffort: 'none' })
+      .success,
+  ).toBe(false);
+  expect(
+    settingsSchema.safeParse({ ...DEFAULT_SETTINGS, model: 'gpt-6-astra', reasoningEffort: 'max' })
+      .success,
+  ).toBe(true);
 });

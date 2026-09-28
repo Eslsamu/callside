@@ -8,7 +8,7 @@ Use a browser that supports microphone capture, `getDisplayMedia`, and AudioWork
 
 For a browser-based call, choose its tab in the sharing picker and enable **Share tab audio** or the equivalent option. A screen or window share does not necessarily include audio. An audio meter moving in the call application does not prove the shared stream includes sound.
 
-Full desktop audio capture varies by browser and OS. If the selected surface supplies no audio track, Callside reports the problem. Choose a supported tab, try the desktop app, or load the audio inputs in settings and select a virtual loopback device under **Call-Audioquelle**. Microphone-only mode is also available.
+Full desktop audio capture varies by browser and OS. If the selected surface supplies no audio track, Callside reports the problem. Choose a supported tab, try the desktop app, or load the audio inputs in settings and select a virtual loopback device under **Call audio source**. Microphone-only mode is also available.
 
 ## macOS
 
@@ -33,7 +33,7 @@ If system capture is unavailable, use a loopback input device or microphone-only
 
 System audio support depends on the browser/Electron build, desktop environment, display server, portal implementation, and PipeWire/PulseAudio configuration. Screen sharing can succeed while system audio is absent.
 
-Prefer shared browser-tab audio where available. Otherwise, expose a monitor/loopback source through your audio routing tools and select it under **Call-Audioquelle**, keeping your physical microphone on its own channel. The application does not install or configure a PipeWire graph. On Wayland, global shortcuts may also be restricted by the desktop environment; use the visible response button or focused **F8** shortcut if registration fails.
+Prefer shared browser-tab audio where available. Otherwise, expose a monitor/loopback source through your audio routing tools and select it under **Call audio source**, keeping your physical microphone on its own channel. The application does not install or configure a PipeWire graph. On Wayland, global shortcuts may also be restricted by the desktop environment; use the visible response button or focused **F8** shortcut if registration fails.
 
 ## Common issues
 

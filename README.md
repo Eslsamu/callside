@@ -2,7 +2,7 @@
 
 A small, local call copilot. See what is being said, ask a question, or press one key for a response you can use in the conversation.
 
-Callside listens to your microphone and the call audio you choose to share. OpenAI transcribes the audio and streams suggestions into a separate panel. You control the model, instructions, background context, and when help appears. The interface is in German.
+Callside listens to your microphone and the call audio you choose to share. OpenAI transcribes the audio and streams suggestions into a separate panel. You control the model, instructions, background context, and when help appears. The interface and repository documentation are in English.
 
 ![Callside displaying a clearly marked demo transcript and a suggested response](docs/assets/callside-demo.png)
 
@@ -43,31 +43,31 @@ npm run build
 npm start
 ```
 
-### Kurzstart auf Deutsch
+### Quick start
 
-1. `npm ci` und `npm run dev` ausführen, dann die angezeigte lokale Adresse öffnen.
-2. Zuerst die Demo ausprobieren. Für einen echten Call den OpenAI API-Key in den Einstellungen hinterlegen.
-3. Modell, Gesprächskontext und Antwortstil einstellen. Mikrofon und Gesprächs-Audio auswählen.
-4. Aufnahme starten und die benötigten Berechtigungen erteilen. Alle Beteiligten vorher über die Transkription informieren.
-5. **F8** drücken, den Antwort-Button klicken oder eine eigene Frage eingeben. Für automatische Hinweise den Auto-Modus aktivieren und seine Regel festlegen.
-6. Aufnahme stoppen und das Gespräch bei Bedarf als JSON oder Markdown exportieren.
+1. Run `npm ci` and `npm run dev`, then open the local address shown.
+2. Select **Try demo**. For real calls, add an OpenAI API key in **Settings**.
+3. Choose your model, prompts, context, microphone, and call audio.
+4. Let everyone know about transcription, then start the call and grant audio permissions.
+5. Press **F8**, click **Suggest answer**, or type a question. Enable **Automatic hints** for prompt-controlled assistance.
+6. End the call and export the session as JSON or Markdown if needed.
 
 ## ChatGPT subscription or API key?
 
 This version uses a **Platform API key**. It does not log into ChatGPT, reuse browser cookies, or read Codex credentials. ChatGPT sign-in is available for supported OpenAI products; OpenAI's authentication documentation directs general API calls to Platform API keys, with API usage billed through the Platform account. A ChatGPT subscription is therefore not configured as payment for Callside's transcription or Responses requests. See the [official OpenAI authentication documentation](https://learn.chatgpt.com/docs/auth#openai-authentication).
 
-The defaults are `gpt-live-transcribe` for live transcription, `gpt-4o-transcribe-diarize` for the diarization mode, and `gpt-4.1-mini` for answers. Access depends on your API project. Model names can be changed in the settings where supported. Check [OpenAI API pricing](https://developers.openai.com/api/docs/pricing) and your project limits before a long call. Automatic mode can make repeated model requests, including requests whose result is silence.
+The defaults are `gpt-live-transcribe` for live transcription, `gpt-4o-transcribe-diarize` for the diarization mode, and `gpt-6-luna` for answers. Access depends on your API project. Answer models are restricted to GPT-6 Luna, Sol, and Astra. Reasoning strength is configurable: None, Low, Medium, High, Extra high, or Maximum; Astra starts at Low. Fast mode requests priority processing where available at 2× standard token rates. It is off by default. The output budget includes both reasoning and visible answer tokens. Check [OpenAI API pricing](https://developers.openai.com/api/docs/pricing) and your project limits before a long call. Automatic mode can make repeated model requests, including requests whose result is silence.
 
 ## Choosing an audio mode
 
-| Mode                | Speaker labels                                                                      | Tradeoff                                                                                                   |
-| ------------------- | ----------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------- |
-| Live transcription  | Microphone and system audio have independent labels, such as “Ich” and “Gegenüber.” | Best for fast help in a one-to-one call. Everyone on system audio shares its label.                        |
-| Speaker diarization | OpenAI distinguishes speakers within each short audio block.                        | Adds block buffering and request latency. Speaker IDs are scoped to a block and can change between blocks. |
+| Mode                | Speaker labels                                                                         | Tradeoff                                                                                                   |
+| ------------------- | -------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------- |
+| Live transcription  | Microphone and system audio have independent labels, such as “Me” and “Other speaker.” | Best for fast help in a one-to-one call. Everyone on system audio shares its label.                        |
+| Speaker diarization | OpenAI distinguishes speakers within each short audio block.                           | Adds block buffering and request latency. Speaker IDs are scoped to a block and can change between blocks. |
 
 “Speaker recognition” here means audio source attribution or diarization. Callside does not identify people by name or maintain voiceprints. Overlapping speech, echo, and poor audio can reduce accuracy. Use headphones to avoid feeding the remote speaker back through your microphone.
 
-In browser mode, choose a shareable tab or surface and enable its audio-sharing option. Support for full system audio depends on the browser and OS. The desktop app provides an additional Electron capture path. If your call's audio cannot be shared, use **Audioeingänge laden** and select a virtual loopback device under **Call-Audioquelle**. This keeps remote audio on the call channel used by automatic hints. See [audio setup and troubleshooting](docs/TROUBLESHOOTING.md).
+In browser mode, choose a shareable tab or surface and enable its audio-sharing option. Support for full system audio depends on the browser and OS. The desktop app provides an additional Electron capture path. If your call's audio cannot be shared, use **Load audio inputs** and select a virtual loopback device under **Call audio source**. This keeps remote audio on the call channel used by automatic hints. See [audio setup and troubleshooting](docs/TROUBLESHOOTING.md).
 
 ## Make suggestions useful
 
@@ -86,7 +86,7 @@ The app and its server run locally. Selected audio and relevant transcript/conte
 - API keys entered in the UI are held in server memory and are not returned to the renderer.
 - The server listens on loopback. Keep it local; this is not a multi-user hosted service.
 - Transcripts and suggestions are not automatically written to disk. Exported files contain the conversation, so choose where to save them carefully.
-- **Vorlage speichern** explicitly saves settings, prompts, and context in browser storage on this device. It does not save API keys or transcripts. **Zurücksetzen** removes that saved template. Settings may contain confidential context, so review them before saving.
+- **Save template** explicitly saves settings, prompts, and context in browser storage on this device. It does not save API keys or transcripts. **Reset** removes that saved template. Settings may contain confidential context, so review them before saving.
 - Stop capture when the call ends. Obtain the participants' agreement before transmitting their audio.
 
 See [security](SECURITY.md) for the threat model and reporting guidance.

@@ -9,7 +9,9 @@ export interface TranscriptEntry {
   final: boolean;
 }
 export interface Settings {
-  model: string;
+  model: (typeof import('./models.js').ANSWER_MODELS)[number];
+  reasoningEffort: import('./models.js').ReasoningEffort;
+  fastMode: boolean;
   transcriptionModel: string;
   language: string;
   systemPrompt: string;

@@ -16,7 +16,7 @@ try {
   const page = await app.firstWindow();
   const errors = [];
   page.on('pageerror', (error) => errors.push(error.message));
-  await expect(page.getByRole('button', { name: 'Demo ausprobieren', exact: true })).toBeEnabled();
+  await expect(page.getByRole('button', { name: 'Try demo', exact: true })).toBeEnabled();
   expect(
     await app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0].isVisible()),
   ).toBe(false);
@@ -25,14 +25,14 @@ try {
     { accelerator: 'F8', registered: false },
     { accelerator: 'CommandOrControl+Shift+Space', registered: false },
   ]);
-  await page.getByRole('button', { name: 'Demo ausprobieren', exact: true }).click();
+  await page.getByRole('button', { name: 'Try demo', exact: true }).click();
   await expect(page.getByTestId('transcript-entry').nth(4)).toBeVisible();
   // Exercise the exact IPC event issued by a registered native global shortcut.
   await app.evaluate(({ BrowserWindow }) =>
     BrowserWindow.getAllWindows()[0].webContents.send('callside:answer'),
   );
-  await expect(page.getByTestId('suggestion')).toContainText('Demo-Vorschlag');
-  await expect(page.getByRole('button', { name: /^Antwort vorschlagen/ })).toBeEnabled();
+  await expect(page.getByTestId('suggestion')).toContainText('Demo suggestion');
+  await expect(page.getByRole('button', { name: /^Suggest answer/ })).toBeEnabled();
   await page.evaluate(() => window.callsideDesktop.setAlwaysOnTop(true));
   expect(
     await app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0].isAlwaysOnTop()),
