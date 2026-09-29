@@ -190,6 +190,8 @@ Settings use a centered maximum width of 1200px, with two columns separated by 4
 
 Conversation panes use a single enclosing surface and internal dividers. Wide layouts place transcript and answer side by side; compact layouts stack transcript before answer. Each pane manages its own long content. The exact session dimensions and first-viewport strategy are recorded in the surface brief.
 
+The [local microphone test](docs/local-test-surface.md) extends the graphite and mint system with a transcript and timing workspace, explicit capture controls, and a stacked layout at 760px.
+
 ## Elevation & Depth
 
 Tonal layers and thin borders establish structure. Main panels, notices, buttons, and fields have no shadows. The export menu is the single floating surface, using an offset soft shadow (`0 8px 20px #0004`) with its own border.

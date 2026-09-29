@@ -11,6 +11,7 @@
   },
   "scripts": {
     "dev": "tsx server/index.ts",
+    "local:test": "tsx server/local-test.ts",
     "build": "tsc --noEmit && vite build && tsc -p tsconfig.server.json",
     "start": "node dist-server/server/index.js",
     "desktop": "npm run build && electron .",

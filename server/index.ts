@@ -17,6 +17,8 @@ import {
   type AiProvider,
 } from './provider.js';
 import { attachRealtime, type RealtimeFactory } from './realtime.js';
+import { attachLocalTest } from './local-test-routes.js';
+import type { LocalEngine } from '../shared/local-test.js';
 
 export interface ServerOptions {
   port?: number;
@@ -26,6 +28,7 @@ export interface ServerOptions {
   apiKey?: string;
   providerFactory?: (apiKey: string) => AiProvider;
   realtimeFactory?: RealtimeFactory;
+  localEngine?: LocalEngine;
 }
 export interface RunningServer {
   url: string;
@@ -108,6 +111,7 @@ export async function startServer(options: ServerOptions = {}): Promise<RunningS
     next();
   });
   app.use('/api', express.json({ limit: '5mb', strict: true }));
+  attachLocalTest(app, options.localEngine);
 
   app.post('/api/key', (req, res) => {
     const parsed = keySchema.safeParse(req.body);

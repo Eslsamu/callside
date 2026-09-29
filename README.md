@@ -6,6 +6,10 @@ Callside listens to your microphone and the call audio you choose to share. Open
 
 ![Callside displaying a clearly marked demo transcript and a suggested response](docs/assets/callside-demo.png)
 
+## Try local transcription without an API key
+
+Run `npm run local:test` for a microphone test with local Whisper, live drafts, and approximate latency measurements. See [the setup and measurement guide](docs/local-transcription-test.md). The first launch downloads a model; speech processing stays on your computer.
+
 ## What it does
 
 - Live transcript with separate labels for your microphone and the other side of the call.
@@ -81,7 +85,7 @@ Automatic mode evaluates finalized transcript updates, observes a cooldown, and 
 
 ## Privacy and boundaries
 
-The app and its server run locally. Selected audio and relevant transcript/context are sent to OpenAI when you use a real session. Local execution does not mean offline inference. Demo mode uses local fixtures.
+The app and its server run locally. Selected audio and relevant transcript/context are sent to OpenAI when you use an API session. The separate local Whisper microphone test processes audio entirely on your computer. Demo mode uses local fixtures.
 
 - API keys entered in the UI are held in server memory and are not returned to the renderer.
 - The server listens on loopback. Keep it local; this is not a multi-user hosted service.

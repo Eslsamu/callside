@@ -1,6 +1,60 @@
 import { expect, test, type Page } from '@playwright/test';
 import { readFile } from 'node:fs/promises';
 
+test('local test keeps Stop available if input enumeration fails after capture starts', async ({
+  page,
+}) => {
+  await page.route('**/api/local-test/status', (route) =>
+    route.fulfill({ json: { ready: true, model: 'synthetic-test' } }),
+  );
+  await page.route('**/api/local-test/transcribe', (route) =>
+    route.fulfill({ json: { text: 'Synthetic audio fixture', processingMs: 1 } }),
+  );
+  await page.addInitScript(() => {
+    let acquired = false;
+    Object.defineProperty(navigator.mediaDevices, 'getUserMedia', {
+      configurable: true,
+      value: async () => {
+        const context = new AudioContext();
+        const oscillator = context.createOscillator();
+        const destination = context.createMediaStreamDestination();
+        oscillator.connect(destination);
+        oscillator.start();
+        acquired = true;
+        (window as unknown as { __localStream: MediaStream }).__localStream = destination.stream;
+        return destination.stream;
+      },
+    });
+    Object.defineProperty(navigator.mediaDevices, 'enumerateDevices', {
+      configurable: true,
+      value: async () => {
+        if (acquired) throw new Error('Synthetic device-list failure');
+        return [];
+      },
+    });
+  });
+  await page.goto('/local-test');
+  await page.getByRole('button', { name: 'Start microphone', exact: true }).click();
+  await expect(page.getByRole('button', { name: 'Stop', exact: true })).toBeVisible();
+  await expect(page.getByRole('alert')).toHaveCount(0);
+  expect(
+    await page.evaluate(
+      () =>
+        (window as unknown as { __localStream: MediaStream }).__localStream.getTracks()[0]
+          .readyState,
+    ),
+  ).toBe('live');
+  await page.getByRole('button', { name: 'Stop', exact: true }).click();
+  await expect(page.getByText('Test complete. Microphone is off.', { exact: true })).toBeVisible();
+  expect(
+    await page.evaluate(() =>
+      (window as unknown as { __localStream: MediaStream }).__localStream
+        .getTracks()
+        .every((track) => track.readyState === 'ended'),
+    ),
+  ).toBe(true);
+});
+
 async function startDemo(page: Page) {
   await page.getByRole('button', { name: 'Try demo', exact: true }).click();
   await expect(page.getByTestId('transcript-entry').first()).toBeVisible();

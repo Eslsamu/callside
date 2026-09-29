@@ -1,0 +1,163 @@
+import { afterEach, describe, expect, it, vi } from 'vitest';
+import { startServer, type RunningServer } from '../server/index.js';
+import { decodeLocalWav } from '../server/local-test-routes.js';
+import { encodeWav } from '../src/audio/dsp.js';
+import { LocalSpeechPipeline, type LocalTurn } from '../src/audio/local.js';
+
+const servers: RunningServer[] = [];
+afterEach(async () => {
+  await Promise.all(servers.splice(0).map((server) => server.close()));
+});
+
+describe('local Whisper test boundary', () => {
+  it('transcribes without constructing a cloud provider, and keeps timing history free of transcript text', async () => {
+    const transcribe = vi.fn(async () => ({ text: 'A local phrase', processingMs: 123 }));
+    const server = await startServer({
+      port: 0,
+      apiOnly: true,
+      apiKey: '',
+      localEngine: { model: 'test-model', transcribe },
+      providerFactory: () => {
+        throw new Error('Cloud access is forbidden');
+      },
+    });
+    servers.push(server);
+    const bootstrap = await fetch(`${server.url}/api/bootstrap`).then((r) => r.json());
+    expect(bootstrap.hasApiKey).toBe(false);
+    const headers = { 'Content-Type': 'application/json', 'X-Callside-Token': bootstrap.token };
+    const payload = {
+      audio: Buffer.from(encodeWav(new Int16Array(16000), 16000)).toString('base64'),
+      language: 'de',
+    };
+    const post = (path: string, body: unknown, extra = {}) =>
+      fetch(server.url + path, {
+        method: 'POST',
+        headers: { ...headers, ...extra },
+        body: JSON.stringify(body),
+      });
+    expect(
+      (await post('/api/local-test/transcribe', payload, { Origin: 'https://another.example' }))
+        .status,
+    ).toBe(403);
+    expect(
+      (await post('/api/local-test/transcribe', payload, { 'X-Callside-Token': 'wrong' })).status,
+    ).toBe(403);
+    expect(
+      (await post('/api/local-test/transcribe', { ...payload, language: 'invalid' })).status,
+    ).toBe(400);
+    expect(await (await post('/api/local-test/transcribe', payload)).json()).toEqual({
+      text: 'A local phrase',
+      processingMs: 123,
+    });
+    expect(transcribe).toHaveBeenCalledTimes(1);
+    expect(
+      await (
+        await post('/api/local-test/measurements', {
+          turnId: 'one',
+          final: true,
+          audioMs: 1000,
+          processingMs: 123,
+          requestMs: 130,
+          queueMs: 0,
+          speechToTextMs: 650,
+          firstTextMs: 1650,
+          transcript: 'Should not be retained',
+        })
+      ).json(),
+    ).toEqual({ ok: true });
+    const report = await fetch(`${server.url}/api/local-test/measurements`, { headers }).then((r) =>
+      r.json(),
+    );
+    expect(report.measurements).toHaveLength(1);
+    expect(JSON.stringify(report)).not.toMatch(/Should not|transcript/);
+    await post('/api/local-test/measurements', { reset: true });
+    expect(
+      (await fetch(`${server.url}/api/local-test/measurements`, { headers }).then((r) => r.json()))
+        .measurements,
+    ).toEqual([]);
+  });
+
+  it('rejects malformed and oversized audio before invoking native code', () => {
+    const wav = encodeWav(new Int16Array(1600), 16000);
+    expect(decodeLocalWav(Buffer.from(wav).toString('base64')).length).toBe(wav.length);
+    const badRate = encodeWav(new Int16Array(2400), 24000);
+    expect(() => decodeLocalWav(Buffer.from(badRate).toString('base64'))).toThrow();
+    expect(() =>
+      decodeLocalWav(Buffer.from(encodeWav(new Int16Array(16000 * 14), 16000)).toString('base64')),
+    ).toThrow();
+    expect(() => decodeLocalWav('AAAA')).toThrow();
+  });
+});
+
+describe('live local speech pipeline', () => {
+  it('coalesces drafts, preserves final turns under load, and drains the last words on stop', async () => {
+    let time = 0;
+    const pending: ((result: { text: string; processingMs: number }) => void)[] = [];
+    const calls: number[] = [];
+    const turns: LocalTurn[] = [];
+    const onError = vi.fn();
+    const pipeline = new LocalSpeechPipeline(
+      async (samples) => {
+        calls.push(samples.length);
+        return new Promise((done) => pending.push(done));
+      },
+      { onTurn: (t) => turns.push(t), onError, onLevel: () => {}, onStatus: () => {} },
+      () => time,
+    );
+    const feed = (frames: number, speaking = true) => {
+      for (let i = 0; i < frames; i++) {
+        time += 50;
+        pipeline.feed(new Int16Array(800).fill(speaking ? 3000 : 0));
+      }
+    };
+    feed(50);
+    feed(11, false);
+    feed(30);
+    const finished = pipeline.finish();
+    expect(calls).toHaveLength(1);
+    for (let i = 0; i < 3; i++) {
+      expect(pending).toHaveLength(1);
+      time += 300;
+      pending.shift()!({ text: `phrase ${i}`, processingMs: 290 });
+      await Promise.resolve();
+      await Promise.resolve();
+      await Promise.resolve();
+    }
+    await finished;
+    expect(turns.filter((t) => t.final).map((t) => t.id)).toEqual(['turn-1', 'turn-2']);
+    expect(turns[0].final).toBe(false);
+    expect(turns.every((t) => t.measurement!.speechToTextMs >= 0)).toBe(true);
+    expect(onError).not.toHaveBeenCalled();
+  });
+
+  it('does not send silence for inference and aborts pending work when capture is canceled', async () => {
+    let time = 0;
+    let signal: AbortSignal | undefined;
+    const transcribe = vi.fn(async (_audio, incoming: AbortSignal) => {
+      signal = incoming;
+      return await new Promise<{ text: string; processingMs: number }>((_done, reject) =>
+        incoming.addEventListener('abort', () => reject(new Error('aborted'))),
+      );
+    });
+    const onError = vi.fn();
+    const pipeline = new LocalSpeechPipeline(
+      transcribe,
+      { onTurn: () => {}, onError, onLevel: () => {}, onStatus: () => {} },
+      () => time,
+    );
+    for (let i = 0; i < 100; i++) {
+      time += 50;
+      pipeline.feed(new Int16Array(800));
+    }
+    expect(transcribe).not.toHaveBeenCalled();
+    for (let i = 0; i < 30; i++) {
+      time += 50;
+      pipeline.feed(new Int16Array(800).fill(3000));
+    }
+    expect(transcribe).toHaveBeenCalledTimes(1);
+    pipeline.cancel();
+    expect(signal!.aborted).toBe(true);
+    await pipeline.finish();
+    expect(onError).not.toHaveBeenCalled();
+  });
+});
