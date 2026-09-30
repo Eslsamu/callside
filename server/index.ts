@@ -143,7 +143,7 @@ export async function startServer(options: ServerOptions = {}): Promise<RunningS
     }
     next();
   });
-  app.use('/api', express.json({ limit: '5mb', strict: true }));
+  app.use('/api', express.json({ limit: '7mb', strict: true }));
   attachLocalTest(app, options.localEngine);
 
   app.post('/api/key', async (req, res) => {
@@ -288,9 +288,15 @@ export async function startServer(options: ServerOptions = {}): Promise<RunningS
     let audio: Buffer;
     try {
       audio = decodeWav(parsed.data.audio);
+      for (const speaker of parsed.data.knownSpeakers ?? []) {
+        const reference = decodeWav(speaker.audio);
+        const duration = (reference.length - 44) / 48000;
+        if (duration < 2 || duration > 10) throw new Error('Invalid speaker reference');
+      }
     } catch {
       res.status(400).json({
-        error: 'Invalid WAV audio. Expected mono PCM16, 24 kHz, up to 60 seconds.',
+        error:
+          'Invalid WAV audio. Expected mono PCM16, 24 kHz, up to 60 seconds, and speaker references of 2–10 seconds.',
       });
       return;
     }

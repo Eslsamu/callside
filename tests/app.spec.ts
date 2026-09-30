@@ -214,6 +214,150 @@ test('live two-channel capture filters microphone echoes in the transcript and e
   await expect(page.getByTestId('transcript-entry')).toHaveCount(2);
 });
 
+test('background attribution updates live turns and answer context without duplicate automatic hints', async ({
+  page,
+}) => {
+  const text = 'The launch is next week. What will the first test cost?';
+  let releaseLabels: (() => void) | undefined;
+  const labelGate = new Promise<void>((resolve) => {
+    releaseLabels = resolve;
+  });
+  const answers: Array<Record<string, any>> = [];
+  let batches = 0;
+  await page.route('**/api/bootstrap', async (route) => {
+    const response = await route.fetch();
+    await route.fulfill({ json: { ...(await response.json()), hasApiKey: true } });
+  });
+  await page.route('**/api/answer', async (route) => {
+    answers.push(route.request().postDataJSON());
+    await route.fulfill({
+      contentType: 'text/event-stream',
+      body: 'data: {"type":"delta","text":"Synthetic suggestion"}\n\ndata: {"type":"done"}\n\n',
+    });
+  });
+  await page.route('**/api/diarize', async (route) => {
+    const body = route.request().postDataJSON();
+    batches++;
+    if (batches !== 1) {
+      await route.fulfill({ json: { entries: [] } });
+      return;
+    }
+    await labelGate;
+    await route.fulfill({
+      json: {
+        entries: [
+          {
+            speaker: 'A',
+            text: 'The launch is next week.',
+            timestamp: body.timestamp,
+            endTimestamp: body.timestamp + 2000,
+          },
+          {
+            speaker: 'B',
+            text: 'What will the first test cost?',
+            timestamp: body.timestamp + 2000,
+            endTimestamp: body.timestamp + 4000,
+          },
+        ],
+      },
+    });
+  });
+  await page.routeWebSocket(/\/api\/realtime\?/, (socket) => {
+    let partialSent = false;
+    socket.onMessage((message) => {
+      const event = JSON.parse(message.toString());
+      if (event.type === 'configure') socket.send(JSON.stringify({ type: 'ready' }));
+      if (event.type === 'input_audio_buffer.append' && !partialSent) {
+        partialSent = true;
+        socket.send(
+          JSON.stringify({
+            type: 'conversation.item.input_audio_transcription.delta',
+            item_id: 'live-turn',
+            delta: text,
+          }),
+        );
+      }
+      if (event.type === 'input_audio_buffer.commit') {
+        socket.send(JSON.stringify({ type: 'input_audio_buffer.committed', item_id: 'live-turn' }));
+        socket.send(
+          JSON.stringify({
+            type: 'conversation.item.input_audio_transcription.completed',
+            item_id: 'live-turn',
+            transcript: text,
+          }),
+        );
+      }
+    });
+  });
+  await page.addInitScript(() => {
+    localStorage.setItem(
+      'callside.settings.v1',
+      JSON.stringify({
+        captureMic: false,
+        backgroundSpeakers: true,
+        diarizationChunkSeconds: 4,
+        autoCooldownMs: 3000,
+      }),
+    );
+    Object.defineProperty(navigator.mediaDevices, 'getDisplayMedia', {
+      configurable: true,
+      value: async () => {
+        const context = new AudioContext();
+        const oscillator = context.createOscillator(),
+          gain = context.createGain();
+        const destination = context.createMediaStreamDestination();
+        gain.gain.value = 0.25;
+        oscillator.connect(gain).connect(destination);
+        oscillator.start();
+        await context.resume();
+        (window as unknown as { __speakerGain: GainNode }).__speakerGain = gain;
+        return destination.stream;
+      },
+    });
+  });
+  await page.reload();
+  await page.getByLabel('Automatic hints', { exact: true }).check();
+  await page.getByLabel('Everyone knows about transcription.').check();
+  await page.getByRole('button', { name: 'Start call', exact: true }).click();
+  await expect(page.getByTestId('transcript-entry')).toHaveCount(1);
+  await expect(page.getByTestId('transcript-entry')).toContainText('Other speaker');
+  await page.keyboard.press('F8');
+  await expect.poll(() => answers.length).toBe(1);
+  expect(answers[0].transcript[0].speaker).toBe('Other speaker');
+  await expect.poll(() => batches, { timeout: 10000 }).toBe(1);
+  await page.evaluate(() => {
+    (window as unknown as { __speakerGain: GainNode }).__speakerGain.gain.value = 0;
+  });
+  await expect.poll(() => answers.filter((answer) => answer.mode === 'auto').length).toBe(1);
+  releaseLabels!();
+  await expect(page.getByTestId('transcript-entry')).toHaveCount(2);
+  await expect(page.getByTestId('transcript-entry').nth(0)).toContainText('Speaker 1');
+  await expect(page.getByTestId('transcript-entry').nth(1)).toContainText('Speaker 2');
+  await expect(page.getByTestId('speaker-attribution-status')).toContainText(
+    'Speaker labels updated',
+  );
+  await page.waitForTimeout(1000); // More than the automatic trigger delay after a label revision.
+  expect(answers.filter((answer) => answer.mode === 'auto')).toHaveLength(1);
+  await page.keyboard.press('F8');
+  await expect.poll(() => answers.length).toBe(3);
+  expect(answers[2].transcript.map((entry: any) => entry.speaker)).toEqual([
+    'Speaker 1',
+    'Speaker 2',
+  ]);
+  await page.getByRole('button', { name: 'End call', exact: true }).click();
+  await expect(page.getByRole('button', { name: 'Start call', exact: true })).toBeEnabled();
+  await page.getByLabel('Export session', { exact: true }).click();
+  const download = page.waitForEvent('download');
+  await page.getByRole('button', { name: 'Session as JSON', exact: true }).click();
+  const exported = JSON.parse(await readFile((await (await download).path())!, 'utf8'));
+  expect(exported.transcript.map((entry: any) => entry.text).join(' ')).toBe(text);
+  expect(new Set(exported.transcript.map((entry: any) => entry.turnId))).toEqual(
+    new Set(['system:live-turn']),
+  );
+  expect(exported.speakerAttribution.enabled).toBe(true);
+  expect(JSON.stringify(exported)).not.toMatch(/knownSpeakers|data:audio|"audio"/);
+});
+
 test('demo produces a transcript and answers typed questions and F8 without a key', async ({
   page,
 }) => {

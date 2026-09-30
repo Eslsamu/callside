@@ -68,6 +68,10 @@ describe('session data', () => {
     expect(restored.captureMic).toBe(true);
     expect(restored.captureMode).toBe('realtime');
     expect(restored).not.toHaveProperty('apiKey');
+    expect(restored.backgroundSpeakers).toBe(true);
+    expect(safeSettings({ backgroundSpeakers: false }, DEFAULT_SETTINGS).backgroundSpeakers).toBe(
+      false,
+    );
   });
   it('exports partial transcript text and makes synthetic sessions explicit', () => {
     const markdown = sessionMarkdown(

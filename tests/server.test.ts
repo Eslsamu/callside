@@ -4,6 +4,7 @@ import { startServer, type RunningServer } from '../server/index.js';
 import { WAIT_SENTINEL, type AiProvider, type AnswerInput } from '../server/provider.js';
 import { DEFAULT_SETTINGS } from '../shared/defaults.js';
 import type { AnswerRequest } from '../shared/types.js';
+import { encodeWav } from '../src/audio/dsp.js';
 
 const servers: RunningServer[] = [];
 afterEach(async () => {
@@ -133,6 +134,48 @@ describe('local HTTP API', () => {
       ).status,
     ).toBe(400);
     expect(answer).not.toHaveBeenCalled();
+  });
+
+  it('validates speaker reference duration and unique names before a provider call', async () => {
+    const diarize = vi.fn(async () => []);
+    const server = await running({ ...simpleProvider([]), diarize });
+    const audio = Buffer.from(encodeWav(new Int16Array(3 * 24000))).toString('base64');
+    const reference = (seconds: number) =>
+      Buffer.from(encodeWav(new Int16Array(seconds * 24000))).toString('base64');
+    const payload = { audio, source: 'system', chunkId: 'references', timestamp: 1000 };
+    for (const seconds of [1, 11])
+      expect(
+        (
+          await server.post('/api/diarize', {
+            ...payload,
+            knownSpeakers: [{ name: 'speaker_1', audio: reference(seconds) }],
+          })
+        ).status,
+      ).toBe(400);
+    expect(
+      (
+        await server.post('/api/diarize', {
+          ...payload,
+          knownSpeakers: [
+            { name: 'speaker_1', audio: reference(2) },
+            { name: 'speaker_1', audio: reference(2) },
+          ],
+        })
+      ).status,
+    ).toBe(400);
+    expect(diarize).not.toHaveBeenCalled();
+    expect(
+      (
+        await server.post('/api/diarize', {
+          ...payload,
+          knownSpeakers: [{ name: 'speaker_1', audio: reference(2) }],
+        })
+      ).status,
+    ).toBe(200);
+    expect(diarize).toHaveBeenCalledWith(
+      expect.objectContaining({ knownSpeakers: [{ name: 'speaker_1', audio: reference(2) }] }),
+      expect.any(AbortSignal),
+    );
   });
 
   it('streams deterministic demo output without a key or provider call', async () => {

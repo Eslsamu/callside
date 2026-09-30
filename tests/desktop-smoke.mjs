@@ -42,7 +42,12 @@ try {
   ).toEqual({ encrypt: 'function', decrypt: 'function' });
   await page.getByRole('button', { name: 'Settings', exact: true }).click();
   await expect(page.getByLabel('Remember API key on this device')).toBeChecked();
+  await expect(page.getByLabel('Identify call speakers in the background')).toBeChecked();
   await expect(page.getByRole('button', { name: 'Save API key', exact: true })).toBeDisabled();
+  if (process.env.CALLSIDE_SMOKE_SCREENSHOT) {
+    await page.getByLabel('Identify call speakers in the background').scrollIntoViewIfNeeded();
+    await page.screenshot({ path: process.env.CALLSIDE_SMOKE_SCREENSHOT });
+  }
   await page.getByRole('button', { name: 'Conversation', exact: true }).click();
   expect(await page.evaluate(() => typeof window.callsideDesktop?.onAnswer)).toBe('function');
   expect(await page.evaluate(() => window.callsideDesktop.getShortcutStatus())).toEqual([

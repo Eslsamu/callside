@@ -12,13 +12,15 @@ npm run check
 
 The build performs TypeScript checking for the UI and server. Unit/integration tests exercise application behavior without a paid provider connection. Playwright runs a headless Chromium instance against a separate local development server using an empty provider key.
 
-The suite contains **43 unit/integration tests** and **6 browser tests**. These counts describe the checks in this repository; hardware and real provider acceptance are separate below.
+The suite contains **72 unit/integration tests** and **10 browser tests**. These counts describe the checks in this repository; hardware and real provider acceptance are separate below.
 
 Browser checks use the explicit demo fixture to cover transcript rendering, manually requested suggestions, keyboard triggering, automatic hints, configuration, GPT-6 model/reasoning/Fast settings, and exports. Demo tests guard against accidental use of real capture devices. The CI workflow does not receive an OpenAI key.
 
 A separate browser check generates synthetic audio with an oscillator and supplies its `MediaStream` to the actual capture code. It exercises AudioWorklet processing, PCM packets, turn commits, transcript events, and track cleanup. Its WebSocket peer is intercepted, so no audio leaves the test server/browser environment.
 
 Fixtures make app behavior repeatable. They do not verify actual OpenAI access, microphone quality, acoustic diarization accuracy, OS audio sharing, or live latency. Successful automated checks must not be described as a successful real call.
+
+Background tests cover voice reference reuse, mixed-speaker turn splitting, overlap-safe enrollment, either result arrival order, silence, queue bounds, failure isolation, and final cancellation. The background browser test holds diarization results until a live manual answer and automatic hint are already available, then checks speaker updates, answer context, no repeated automatic hint, and an export without raw clips. Local API tests reject malformed, duplicate, or incorrectly sized references before upstream use.
 
 ## Desktop smoke check
 
@@ -39,7 +41,7 @@ Run these checks with your own API project, a short synthetic conversation, and 
 3. Use headphones. Alternate local and remote speech and confirm their labels are not duplicated by acoustic echo.
 4. Press F8 in the focused app, click the response button, and submit a typed question. Confirm the answer uses recent context and streams progressively.
 5. Enable automatic mode with a narrow rule. Ask a matching question, then make a nonmatching statement. Confirm the first can produce a suggestion and the second can remain silent. This is a model-behavior check, so record the observed behavior rather than requiring a deterministic answer.
-6. Use diarization with two voices on the same source. Confirm within-block speaker labels and accurate timing. Confirm labels remain visibly scoped to each block.
+6. In Fast mode, leave **Identify call speakers in the background** on and use headphones. Have two remote voices each speak a few complete sentences. Confirm live text appears first, existing turns gain Speaker 1/2 labels, and labels follow returning voices across batches. Check the processing status. Also test legacy diarized mode separately, where labels remain scoped to each block.
 7. Stop mid-sentence. Confirm the capture indicators stop, OS device access ends, and the final buffered speech either completes or an actionable error is reported.
 8. End screen sharing from the OS/browser control. Confirm Callside handles the ended source visibly and does not claim uninterrupted recording.
 9. Briefly disconnect the network. Confirm the error is visible and no endless request or recording state remains after Stop.

@@ -137,6 +137,36 @@ describe('OpenAI provider contract (no upstream network)', () => {
     expect(() => decodeWav(invalid.toString('base64'))).toThrow('Invalid audio');
     expect(() => decodeWav(Buffer.from('RIFFnot-a-valid-wav').toString('base64'))).toThrow();
   });
+  it('passes reference names and WAV data URLs to OpenAI and retains segment ends', async () => {
+    mocked.transcriptions.mockResolvedValue({
+      segments: [{ speaker: 'speaker_1', text: 'Hello again', start: 0.5, end: 2.75 }],
+    });
+    const provider = new OpenAIProvider('not-a-real-key');
+    const reference = wav().toString('base64');
+    const entries = await provider.diarize(
+      {
+        audio: wav(),
+        source: 'system',
+        chunkId: 'known',
+        timestamp: 1000,
+        language: '',
+        knownSpeakers: [{ name: 'speaker_1', audio: reference }],
+      },
+      new AbortController().signal,
+    );
+    expect(mocked.transcriptions).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        known_speaker_names: ['speaker_1'],
+        known_speaker_references: [`data:audio/wav;base64,${reference}`],
+      }),
+      expect.anything(),
+    );
+    expect(entries[0]).toMatchObject({
+      timestamp: 1500,
+      endTimestamp: 3750,
+      speaker: 'system:known:speaker_1',
+    });
+  });
 });
 
 describe('GPT-6 model parameters', () => {

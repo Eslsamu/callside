@@ -5,7 +5,7 @@ import { TranscriptAssembler } from './transcript.js';
 export interface AudioSink {
   beginTurn(timestamp: number): void;
   append(samples: Int16Array, timestamp: number): void;
-  commit(): void;
+  commit(timestamp?: number): void;
   stop(): Promise<void>;
 }
 
@@ -38,6 +38,7 @@ export async function createRealtimeSink(
   let ready = false;
   let failed = false;
   let samplesInTurn = 0;
+  let latestAudioEnd = 0;
   let stopPromise: Promise<void> | undefined;
   let onProgress: (() => void) | undefined;
   let incompleteReported = false;
@@ -129,8 +130,9 @@ export async function createRealtimeSink(
     }
     socket.send(JSON.stringify(event));
   };
-  const commit = () => {
+  const commit = (timestamp = latestAudioEnd) => {
     if (samplesInTurn < 2400) return;
+    transcript.endTurn(timestamp);
     send({ type: 'input_audio_buffer.commit' });
     samplesInTurn = 0;
   };
@@ -138,9 +140,10 @@ export async function createRealtimeSink(
     beginTurn(timestamp) {
       transcript.beginTurn(timestamp);
     },
-    append(samples) {
+    append(samples, timestamp) {
       if (closing || !samples.length) return;
       samplesInTurn += samples.length;
+      latestAudioEnd = timestamp + samples.length / 24;
       send({ type: 'input_audio_buffer.append', audio: bytesToBase64(pcmBytes(samples)) });
     },
     commit,

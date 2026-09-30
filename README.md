@@ -13,7 +13,7 @@ Run `npm run local:test` for a microphone test with local Whisper, live drafts, 
 ## What it does
 
 - Live transcript with separate labels for your microphone and the other side of the call.
-- Optional speaker diarization for multiple people within the same audio source.
+- Background speaker attribution for the call channel while live text and suggestions continue.
 - A response button, typed questions, and **F8** while Callside has focus.
 - Desktop shortcuts **F8** and **⌘⇧Space** on macOS or **Ctrl+Shift+Space** on Windows/Linux, which also work while the desktop app is in the background when the OS allows registration.
 - Automatic hints: give the assistant a rule such as “suggest an answer whenever the customer asks a question.” The model can choose to stay quiet.
@@ -65,12 +65,19 @@ The defaults are `gpt-live-transcribe` for live transcription, `gpt-4o-transcrib
 
 ## Choosing an audio mode
 
-| Mode                | Speaker labels                                                                         | Tradeoff                                                                                                   |
-| ------------------- | -------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------- |
-| Live transcription  | Microphone and system audio have independent labels, such as “Me” and “Other speaker.” | Best for fast help in a one-to-one call. Everyone on system audio shares its label.                        |
-| Speaker diarization | OpenAI distinguishes speakers within each short audio block.                           | Adds block buffering and request latency. Speaker IDs are scoped to a block and can change between blocks. |
+| Mode                                        | Speaker labels                                                                                                    | Tradeoff                                                                                                   |
+| ------------------------------------------- | ----------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------- |
+| Live + background speakers (default)        | Live text first, then Speaker 1–4 labels linked using voice reference clips. Your microphone keeps its own label. | Suggestions do not wait for attribution. Adds a paid diarization pass over call audio.                     |
+| Live transcription, background speakers off | Microphone and system audio have independent labels, such as “Me” and “Other speaker.”                            | Useful for one-to-one calls. Everyone on system audio shares its label.                                    |
+| Speaker diarization                         | OpenAI distinguishes speakers within each short audio block.                                                      | Adds block buffering and request latency. Speaker IDs are scoped to a block and can change between blocks. |
 
-“Speaker recognition” here means audio source attribution or diarization. Callside does not identify people by name or maintain voiceprints. Overlapping speech, echo, and poor audio can reduce accuracy. Use headphones to avoid feeding the remote speaker back through your microphone.
+In **Fast: separate live channels**, **Identify call speakers in the background** is enabled by default. The same captured call audio is also analyzed by `gpt-4o-transcribe-diarize` in 12-second batches with up to two seconds of overlap. Existing saved batch lengths are retained. Text and suggestions appear before labels are available. Background results update or split existing transcript turns while preserving the original live wording; they do not append a second transcript or trigger an automatic hint again for the same live turn. Corrected labels are used by later answers and exports.
+
+Clean, non-overlapping voice clips of 2–6 seconds are kept in capture memory for up to four remote speakers and sent as OpenAI known-speaker references in later requests. This links generic Speaker 1–4 labels between batches, but is not a guarantee of identity. Short or overlapping voices without a clean clip, and additional voices beyond the reference limit, remain visibly scoped to their batch. Reference clips are cleared at the end of capture and excluded from templates and exports. Callside does not infer real names or enroll permanent voiceprints.
+
+The status line shows processing time after a result, excluding the time spent collecting the batch. When background analysis cannot keep up, it skips older pending batches. If it fails, it pauses attribution while live transcription continues. Some turns may remain unattributed. End call drains final work for at most ten seconds for background attribution. Disable the background checkbox to avoid its extra API usage; the overlap also adds a small amount of repeated audio analysis.
+
+Overlapping speech, echo, and poor audio can reduce accuracy. Use headphones to avoid feeding the remote speaker back through your microphone. Speaker attribution on the call channel does not remove acoustic microphone bleed.
 
 **Filter microphone echo duplicates** is enabled by default. When near-identical speech starts on both channels within 750 ms, the transcript keeps the finalized call-channel copy. Numbers and negations must agree; short replies and later repetitions remain. Blank transcript turns are omitted. This text filter does not prevent duplicate audio from being transcribed or reduce transcription billing. Disable it to compare the original channel entries in the current session. It is a heuristic and can misclassify simultaneous repetition; headphones still give the cleanest separation.
 

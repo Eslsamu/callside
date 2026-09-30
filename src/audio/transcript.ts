@@ -11,7 +11,8 @@ interface TranscriptEvent {
 /** Matches revisions by provider item ID; arrival order never determines transcript order. */
 export class TranscriptAssembler {
   private entries = new Map<string, TranscriptEntry>();
-  private unassignedStarts: number[] = [];
+  private unassignedStarts: Array<{ timestamp: number; endTimestamp?: number; id?: string }> = [];
+  private activeTurn?: { timestamp: number; endTimestamp?: number; id?: string };
   private lastTimestamp = 0;
 
   constructor(
@@ -21,14 +22,28 @@ export class TranscriptAssembler {
   ) {}
 
   beginTurn(timestamp: number): void {
-    this.unassignedStarts.push(timestamp);
+    this.activeTurn = { timestamp };
+    this.unassignedStarts.push(this.activeTurn);
+  }
+
+  endTurn(timestamp: number): void {
+    const turn = this.activeTurn;
+    if (!turn) return;
+    turn.endTimestamp = Math.max(turn.timestamp, timestamp);
+    const entry = turn.id ? this.entries.get(turn.id) : undefined;
+    if (entry) {
+      entry.endTimestamp = turn.endTimestamp;
+      if (entry.text) this.emit({ ...entry });
+    }
+    this.activeTurn = undefined;
   }
 
   private entry(id: string): TranscriptEntry {
     let entry = this.entries.get(id);
     if (!entry) {
-      const timestamp =
-        this.unassignedStarts.shift() ?? Math.max(Date.now(), this.lastTimestamp + 1);
+      const turn = this.unassignedStarts.shift();
+      const timestamp = turn?.timestamp ?? Math.max(Date.now(), this.lastTimestamp + 1);
+      if (turn) turn.id = id;
       this.lastTimestamp = timestamp;
       entry = {
         id: `${this.source}:${id}`,
@@ -36,6 +51,7 @@ export class TranscriptAssembler {
         speaker: this.speaker,
         text: '',
         timestamp,
+        ...(turn?.endTimestamp !== undefined ? { endTimestamp: turn.endTimestamp } : {}),
         final: false,
       };
       this.entries.set(id, entry);

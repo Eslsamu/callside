@@ -1,6 +1,7 @@
 import type { CaptureCallbacks, CaptureHandle, Settings, Source } from '../../shared/types.js';
 import { floatToPcm16, rms, StreamingResampler, VoiceActivityDetector } from './dsp.js';
 import { createDiarizedSink, createRealtimeSink, type AudioSink } from './transports.js';
+import { createBackgroundSpeakerSink } from './background.js';
 
 interface SourceCapture {
   source: Source;
@@ -9,6 +10,8 @@ interface SourceCapture {
   node?: AudioWorkletNode;
   input?: MediaStreamAudioSourceNode;
   sink?: AudioSink;
+  background?: AudioSink;
+  lastAudioEnd?: number;
   vad?: VoiceActivityDetector;
   finishWorklet?: () => Promise<void>;
   signalTimer?: ReturnType<typeof setTimeout>;
@@ -62,7 +65,7 @@ export async function startCapture(
           } catch {
             /* bounded flush below still releases tracks */
           }
-          if (capture.vad?.flush()) capture.sink?.commit();
+          if (capture.vad?.flush()) capture.sink?.commit(capture.lastAudioEnd);
           capture.node?.disconnect();
           capture.input?.disconnect();
           for (const track of capture.stream.getTracks()) {
@@ -75,7 +78,7 @@ export async function startCapture(
       );
       await Promise.all(
         sources.map(async (capture) => {
-          await capture.sink?.stop();
+          await Promise.all([capture.sink?.stop(), capture.background?.stop()]);
           callbacks.onLevel(capture.source, 0);
           callbacks.onStatus(capture.source, 'Ended');
         }),
@@ -183,6 +186,12 @@ export async function startCapture(
           await capture.sink.stop();
           throw new Error('Recording ended during startup.');
         }
+        if (
+          settings.captureMode === 'realtime' &&
+          settings.backgroundSpeakers &&
+          capture.source === 'system'
+        )
+          capture.background = createBackgroundSpeakerSink(settings, token, callbacks);
         const context = new AudioContext({ latencyHint: 'interactive' });
         capture.context = context;
         await context.audioWorklet.addModule('/pcm-worklet.js');
@@ -223,7 +232,10 @@ export async function startCapture(
           }
           const timestamp = originTime + receivedSamples / 24;
           receivedSamples += samples.length;
+          capture.lastAudioEnd = timestamp + samples.length / 24;
           const level = rms(samples);
+          // Analyze the continuous system timeline, not the VAD's cropped live turns.
+          capture.background?.append(samples, timestamp);
           callbacks.onLevel(capture.source, Math.min(1, level * 5));
           if (level > 0.003 && !hadSignal) {
             hadSignal = true;
@@ -238,7 +250,7 @@ export async function startCapture(
             if (result.startedAtSample !== undefined)
               capture.sink!.beginTurn(originTime + result.startedAtSample / 24);
             for (const part of result.audio) capture.sink!.append(part, timestamp);
-            if (result.commit) capture.sink!.commit();
+            if (result.commit) capture.sink!.commit(timestamp + samples.length / 24);
           } else capture.sink!.append(samples, timestamp);
         };
         node.onprocessorerror = () => fail('Audio processing was interrupted. Restart recording.');

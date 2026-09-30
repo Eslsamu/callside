@@ -382,6 +382,13 @@ nav {
   color: var(--muted);
   min-width: 0;
 }
+.attribution-status {
+  padding: 9px 25px;
+  border-bottom: 1px solid var(--line);
+  color: var(--muted);
+  font-size: 11px;
+  line-height: 1.5;
+}
 .source-item:first-child svg {
   color: var(--accent);
 }

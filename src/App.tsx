@@ -88,6 +88,7 @@ export default function App() {
     mic: 'Ready',
     system: 'Ready',
   });
+  const [attributionStatus, setAttributionStatus] = useState('');
   const [copied, setCopied] = useState('');
   const captureRef = useRef<CaptureHandle | null>(null);
   const answerRef = useRef<AbortController | null>(null);
@@ -247,10 +248,11 @@ export default function App() {
   useEffect(() => {
     if (!auto || !listening || busy) return;
     const last = [...entries].reverse().find((entry) => entry.final && entry.source === 'system');
-    if (!last || last.id === autoSeen.current) return;
+    const turnId = last?.turnId ?? last?.id;
+    if (!last || turnId === autoSeen.current) return;
     const delay = Math.max(550, settings.autoCooldownMs - (Date.now() - lastAutoAt.current));
     autoTimer.current = setTimeout(() => {
-      autoSeen.current = last.id;
+      autoSeen.current = turnId!;
       lastAutoAt.current = Date.now();
       void requestAnswer('auto');
     }, delay);
@@ -320,6 +322,7 @@ export default function App() {
     followTranscript.current = true;
     setError('');
     setNotice('');
+    setAttributionStatus('');
   }
 
   function startDemo() {
@@ -374,6 +377,16 @@ export default function App() {
         {
           onTranscript: (entry) => {
             if (epoch === sessionEpoch.current) addEntry(entry);
+          },
+          onAttribution: (result) => {
+            if (epoch !== sessionEpoch.current) return;
+            reconciler.current.attribute(result);
+            setEntries(
+              reconciler.current.view(latest.current.settings.filterMicrophoneEcho).entries,
+            );
+          },
+          onAttributionStatus: (status) => {
+            if (epoch === sessionEpoch.current) setAttributionStatus(status);
           },
           onLevel: (source, level) => {
             if (epoch === sessionEpoch.current)
@@ -465,6 +478,15 @@ export default function App() {
               exportedAt: new Date().toISOString(),
               demo,
               transcript: entries,
+              speakerAttribution: {
+                enabled:
+                  settings.captureMode === 'realtime' &&
+                  settings.backgroundSpeakers &&
+                  settings.captureSystem &&
+                  !demo,
+                batchSeconds: settings.diarizationChunkSeconds,
+                status: attributionStatus,
+              },
               suggestions,
             },
             null,
@@ -631,7 +653,9 @@ export default function App() {
                 {demo
                   ? 'No API costs'
                   : settings.captureMode === 'realtime'
-                    ? 'Live · separate audio channels'
+                    ? settings.backgroundSpeakers && settings.captureSystem
+                      ? 'Live · speaker labels in background'
+                      : 'Live · separate audio channels'
                     : `Speaker identification · ${settings.diarizationChunkSeconds}-second chunks`}
               </span>
             )}
@@ -662,6 +686,15 @@ export default function App() {
                   </div>
                 ))}
               </div>
+              {attributionStatus && (
+                <div
+                  className="attribution-status"
+                  role="status"
+                  data-testid="speaker-attribution-status"
+                >
+                  {attributionStatus}
+                </div>
+              )}
               <div
                 className="transcript-content"
                 onScroll={(e) => {
@@ -1198,10 +1231,41 @@ export default function App() {
                         <option value="gpt-4o-transcribe">gpt-4o-transcribe</option>
                       </select>
                     </label>
+                    <label className="checkbox-label">
+                      <input
+                        type="checkbox"
+                        checked={settings.backgroundSpeakers}
+                        onChange={(e) => update('backgroundSpeakers', e.target.checked)}
+                      />
+                      Identify call speakers in the background
+                    </label>
                     <p className="field-help">
-                      Me and Other speaker are assigned by audio source. Multiple voices on the call
-                      are not identified separately in this mode.
+                      Live text and suggestions appear immediately. OpenAI adds speaker labels to
+                      call audio afterward. Your microphone keeps its own label. Headphones prevent
+                      playback from entering your microphone.
                     </p>
+                    {settings.backgroundSpeakers && (
+                      <>
+                        <label>
+                          Speaker analysis batch length in seconds
+                          <input
+                            type="number"
+                            min={4}
+                            max={30}
+                            value={settings.diarizationChunkSeconds}
+                            onChange={(e) =>
+                              update('diarizationChunkSeconds', Number(e.target.value))
+                            }
+                          />
+                        </label>
+                        <p className="field-help">
+                          Uses gpt-4o-transcribe-diarize as an additional paid pass over call audio.
+                          Labels arrive after each batch is processed. Up to four voices are linked
+                          between batches using temporary reference clips. Other voices stay labeled
+                          per batch. Clips are cleared when the call ends and are not exported.
+                        </p>
+                      </>
+                    )}
                   </>
                 ) : (
                   <>

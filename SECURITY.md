@@ -14,6 +14,8 @@ Session transcripts and suggestions stay in memory unless the user exports them.
 
 The optional **Save template** action stores settings, prompts, and background context in the renderer's `localStorage`. It excludes keys, transcripts, and suggestions. This is ordinary local browser storage, not encrypted secret storage. **Reset** removes the template. Take care when saving confidential context on a shared device.
 
+Background attribution sends an additional copy of call audio and up to four temporary voice reference clips to OpenAI. Clips remain in capture memory and are cleared when capture ends; they are not included in saved templates, JSON, or Markdown exports. Resulting speaker labels are estimates, not verified personal identities.
+
 ## Local server boundary
 
 The server binds to loopback, validates request origins, and requires a per-process token for protected API routes. The token protects against ordinary cross-origin web requests. It is not a defense against malicious local software, a compromised browser extension, or an attacker already able to read the local process or renderer.

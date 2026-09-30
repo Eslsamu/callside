@@ -98,6 +98,33 @@ describe('client voice activity detection', () => {
 });
 
 describe('transcript ordering', () => {
+  it('retains measured turn ends whether commits precede or follow provider events', () => {
+    const received: TranscriptEntry[] = [];
+    const assembler = new TranscriptAssembler('system', 'Other speaker', (entry) =>
+      received.push(entry),
+    );
+    assembler.beginTurn(1000);
+    assembler.endTurn(4000);
+    assembler.accept({
+      type: 'conversation.item.input_audio_transcription.completed',
+      item_id: 'a',
+      transcript: 'First',
+    });
+    assembler.beginTurn(5000);
+    assembler.accept({
+      type: 'conversation.item.input_audio_transcription.delta',
+      item_id: 'b',
+      delta: 'Second',
+    });
+    assembler.endTurn(7000);
+    assembler.accept({
+      type: 'conversation.item.input_audio_transcription.completed',
+      item_id: 'b',
+      transcript: 'Second',
+    });
+    expect(received[0].endTimestamp).toBe(4000);
+    expect(received.at(-1)).toMatchObject({ timestamp: 5000, endTimestamp: 7000 });
+  });
   it('uses capture timestamps even when the second turn completes first', () => {
     const received: TranscriptEntry[] = [];
     const assembler = new TranscriptAssembler('system', 'Other speaker', (entry) =>

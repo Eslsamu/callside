@@ -1,4 +1,5 @@
-import type { TranscriptEntry } from '../../shared/types';
+import type { SpeakerAttribution, TranscriptEntry } from '../../shared/types';
+import { SpeakerAttributionOverlay } from './attribution';
 
 const normalize = (text: string) =>
   text
@@ -45,11 +46,20 @@ function echoMatch(a: TranscriptEntry, b: TranscriptEntry): boolean {
 /** Retains raw revisions so disabling the filter can restore every original turn. */
 export class TranscriptReconciler {
   private raw = new Map<string, TranscriptEntry>();
+  private attribution = new SpeakerAttributionOverlay();
   clear() {
     this.raw.clear();
+    this.attribution.clear();
   }
   accept(entry: TranscriptEntry) {
     if (!this.raw.get(entry.id)?.final) this.raw.set(entry.id, { ...entry });
+    else if (entry.endTimestamp !== undefined) {
+      const previous = this.raw.get(entry.id)!;
+      this.raw.set(entry.id, { ...previous, endTimestamp: entry.endTimestamp });
+    }
+  }
+  attribute(result: SpeakerAttribution) {
+    this.attribution.accept(result);
   }
   view(filterEcho = true): { entries: TranscriptEntry[]; echoCount: number } {
     const all = [...this.raw.values()]
@@ -79,6 +89,6 @@ export class TranscriptReconciler {
       }
       return true;
     });
-    return { entries, echoCount };
+    return { entries: entries.flatMap((entry) => this.attribution.apply(entry)), echoCount };
   }
 }

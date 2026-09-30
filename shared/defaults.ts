@@ -16,9 +16,10 @@ export const DEFAULT_SETTINGS: Settings = {
   captureMic: true,
   captureSystem: true,
   filterMicrophoneEcho: true,
+  backgroundSpeakers: true,
   micDeviceId: '',
   systemDeviceId: '',
   micLabel: 'Me',
   systemLabel: 'Other speaker',
-  diarizationChunkSeconds: 8,
+  diarizationChunkSeconds: 12,
 };
