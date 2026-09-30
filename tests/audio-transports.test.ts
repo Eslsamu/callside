@@ -206,7 +206,7 @@ describe('diarization queue', () => {
 
 describe('capture startup cleanup', () => {
   it('releases an already granted system stream when microphone permission fails', async () => {
-    const track = { stop: vi.fn(), onended: null };
+    const track = { stop: vi.fn(), onended: null, readyState: 'live' };
     const stream = { getAudioTracks: () => [track], getTracks: () => [track] };
     vi.stubGlobal('AudioWorkletNode', class {});
     vi.stubGlobal('navigator', {

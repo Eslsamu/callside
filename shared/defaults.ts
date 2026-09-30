@@ -15,6 +15,7 @@ export const DEFAULT_SETTINGS: Settings = {
   captureMode: 'realtime',
   captureMic: true,
   captureSystem: true,
+  filterMicrophoneEcho: true,
   micDeviceId: '',
   systemDeviceId: '',
   micLabel: 'Me',

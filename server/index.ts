@@ -29,6 +29,11 @@ export interface ServerOptions {
   providerFactory?: (apiKey: string) => AiProvider;
   realtimeFactory?: RealtimeFactory;
   localEngine?: LocalEngine;
+  keyStore?: {
+    load(): Promise<string | null>;
+    save(key: string): Promise<void>;
+    remove(): Promise<void>;
+  };
 }
 export interface RunningServer {
   url: string;
@@ -57,7 +62,35 @@ export async function startServer(options: ServerOptions = {}): Promise<RunningS
   let url = '';
   let authority = '';
   let inMemoryKey: string | undefined = options.apiKey;
+  let savedKey = false;
+  let storageError = '';
+  let keyUpdate = Promise.resolve();
+  if (options.keyStore) {
+    try {
+      const key = await options.keyStore.load();
+      if (key) {
+        inMemoryKey = key;
+        savedKey = true;
+      }
+    } catch {
+      savedKey = true;
+      storageError =
+        'The saved API key could not be unlocked. Re-enter it or remove the saved key.';
+    }
+  }
   const getApiKey = () => inMemoryKey ?? process.env.OPENAI_API_KEY?.trim() ?? '';
+  const keyStatus = () => ({
+    hasApiKey: Boolean(getApiKey()),
+    ...(options.keyStore
+      ? {
+          keyStorage: {
+            canRemember: true,
+            saved: savedKey,
+            ...(storageError ? { error: storageError } : {}),
+          },
+        }
+      : {}),
+  });
   const provider = () =>
     (options.providerFactory ?? ((key) => new OpenAIProvider(key)))(getApiKey());
   const active = new Set<AbortController>();
@@ -94,7 +127,7 @@ export async function startServer(options: ServerOptions = {}): Promise<RunningS
     res.setHeader('Cache-Control', 'no-store');
     res.json({
       token,
-      hasApiKey: Boolean(getApiKey()),
+      ...keyStatus(),
       models: [...ANSWER_MODELS],
     });
   });
@@ -113,14 +146,39 @@ export async function startServer(options: ServerOptions = {}): Promise<RunningS
   app.use('/api', express.json({ limit: '5mb', strict: true }));
   attachLocalTest(app, options.localEngine);
 
-  app.post('/api/key', (req, res) => {
+  app.post('/api/key', async (req, res) => {
     const parsed = keySchema.safeParse(req.body);
     if (!parsed.success) {
       res.status(400).json({ error: 'Invalid API key.' });
       return;
     }
-    inMemoryKey = parsed.data.apiKey;
-    res.json({ hasApiKey: Boolean(getApiKey()) });
+    if (parsed.data.remember && !options.keyStore) {
+      res.status(400).json({
+        error:
+          'Remembering keys requires the desktop app. Use OPENAI_API_KEY for a persistent browser setup.',
+      });
+      return;
+    }
+    const update = keyUpdate.then(async () => {
+      const { apiKey, remember } = parsed.data;
+      if (options.keyStore) {
+        if (remember && apiKey) await options.keyStore.save(apiKey);
+        else await options.keyStore.remove();
+        savedKey = Boolean(remember && apiKey);
+        storageError = '';
+      }
+      inMemoryKey = apiKey;
+    });
+    keyUpdate = update.catch(() => undefined);
+    try {
+      await update;
+      res.json(keyStatus());
+    } catch {
+      res.status(500).json({
+        error:
+          'Could not update secure key storage. Your previous key has not been changed. Check that the operating system key store is unlocked.',
+      });
+    }
   });
 
   function limited(kind: 'answer' | 'diarize', res: Response): boolean {
@@ -318,6 +376,7 @@ export async function startServer(options: ServerOptions = {}): Promise<RunningS
       const closing = new Promise<void>((resolveClose) => server.close(() => resolveClose()));
       server.closeAllConnections();
       await closing;
+      await keyUpdate;
       inMemoryKey = '';
     },
   };

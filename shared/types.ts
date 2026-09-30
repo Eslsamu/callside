@@ -22,6 +22,7 @@ export interface Settings {
   captureMode: CaptureMode;
   captureMic: boolean;
   captureSystem: boolean;
+  filterMicrophoneEcho: boolean;
   micDeviceId: string;
   systemDeviceId: string;
   micLabel: string;
@@ -53,6 +54,7 @@ export interface Bootstrap {
   token: string;
   hasApiKey: boolean;
   models: string[];
+  keyStorage?: { canRemember: boolean; saved: boolean; error?: string };
 }
 export interface CaptureCallbacks {
   onTranscript: (entry: TranscriptEntry) => void;

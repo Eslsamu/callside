@@ -51,6 +51,7 @@ npm start
 
 1. Run `npm ci` and `npm run dev`, then open the local address shown.
 2. Select **Try demo**. For real calls, add an OpenAI API key in **Settings**.
+   In the desktop app, leave **Remember API key on this device** checked and click **Save API key** to reuse it after restarting. **Remove API key** clears the saved key and the current session key. Browser users can set `OPENAI_API_KEY` in a local `.env` file.
 3. Choose your model, prompts, context, microphone, and call audio.
 4. Let everyone know about transcription, then start the call and grant audio permissions.
 5. Press **F8**, click **Suggest answer**, or type a question. Enable **Automatic hints** for prompt-controlled assistance.
@@ -71,6 +72,8 @@ The defaults are `gpt-live-transcribe` for live transcription, `gpt-4o-transcrib
 
 “Speaker recognition” here means audio source attribution or diarization. Callside does not identify people by name or maintain voiceprints. Overlapping speech, echo, and poor audio can reduce accuracy. Use headphones to avoid feeding the remote speaker back through your microphone.
 
+**Filter microphone echo duplicates** is enabled by default. When near-identical speech starts on both channels within 750 ms, the transcript keeps the finalized call-channel copy. Numbers and negations must agree; short replies and later repetitions remain. Blank transcript turns are omitted. This text filter does not prevent duplicate audio from being transcribed or reduce transcription billing. Disable it to compare the original channel entries in the current session. It is a heuristic and can misclassify simultaneous repetition; headphones still give the cleanest separation.
+
 In browser mode, choose a shareable tab or surface and enable its audio-sharing option. Support for full system audio depends on the browser and OS. The desktop app provides an additional Electron capture path. If your call's audio cannot be shared, use **Load audio inputs** and select a virtual loopback device under **Call audio source**. This keeps remote audio on the call channel used by automatic hints. See [audio setup and troubleshooting](docs/TROUBLESHOOTING.md).
 
 ## Make suggestions useful
@@ -87,7 +90,7 @@ Automatic mode evaluates finalized transcript updates, observes a cooldown, and 
 
 The app and its server run locally. Selected audio and relevant transcript/context are sent to OpenAI when you use an API session. The separate local Whisper microphone test processes audio entirely on your computer. Demo mode uses local fixtures.
 
-- API keys entered in the UI are held in server memory and are not returned to the renderer.
+- API keys are held in server memory and are not returned to the renderer. Desktop users can explicitly remember a key using OS-backed encryption in app data outside the repository. Browser/session-only keys are not persisted by the UI.
 - The server listens on loopback. Keep it local; this is not a multi-user hosted service.
 - Transcripts and suggestions are not automatically written to disk. Exported files contain the conversation, so choose where to save them carefully.
 - **Save template** explicitly saves settings, prompts, and context in browser storage on this device. It does not save API keys or transcripts. **Reset** removes that saved template. Settings may contain confidential context, so review them before saving.

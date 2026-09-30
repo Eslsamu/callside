@@ -1,5 +1,7 @@
 # Testing
 
+Key-storage tests save authenticated synthetic ciphertext in temporary directories, restart the local server, and verify restoration, deletion, file permissions, unavailable/insecure storage rejection, and error redaction. They never access a real OS keychain or call OpenAI. Browser tests exercise the remember/remove controls with mocked storage capabilities. Transcript reconciliation tests cover cross-channel arrival order, small ASR differences, numbers/negations, short answers, later repetitions, and blank turns. Real microphone echo varies with routing and hardware, so use headphones for the final live check.
+
 ## Automated checks
 
 ```sh

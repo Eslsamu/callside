@@ -26,6 +26,7 @@ export const settingsSchema = z
     captureMode: z.enum(['realtime', 'diarized']),
     captureMic: z.boolean(),
     captureSystem: z.boolean(),
+    filterMicrophoneEcho: z.boolean().default(true),
     micDeviceId: z.string().max(500),
     systemDeviceId: z.string().max(500).default(''),
     micLabel: z.string().max(80),
@@ -57,6 +58,7 @@ export const answerSchema = z.object({
   demo: z.boolean().default(false),
 });
 export const keySchema = z.object({
+  remember: z.boolean().default(false),
   apiKey: z
     .string()
     .trim()

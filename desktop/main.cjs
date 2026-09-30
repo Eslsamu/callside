@@ -6,7 +6,9 @@ const {
   ipcMain,
   session,
   dialog,
+  safeStorage,
 } = require('electron');
+const { createKeyStore } = require('./key-store.cjs');
 const path = require('node:path');
 const { pathToFileURL } = require('node:url');
 const smokeTest = process.argv.includes('--smoke-test');
@@ -87,7 +89,11 @@ async function boot() {
   const serverModule = await import(
     pathToFileURL(path.join(__dirname, '../dist-server/server/index.js')).href
   );
-  server = await serverModule.startServer({ port: 0, production: true });
+  server = await serverModule.startServer({
+    port: 0,
+    production: true,
+    keyStore: createKeyStore(path.join(app.getPath('userData'), 'openai-key.enc'), safeStorage),
+  });
   appOrigin = new URL(server.url).origin;
 
   const appSession = session.defaultSession;

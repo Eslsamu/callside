@@ -1,6 +1,6 @@
 # Internal API contract
 
-All runtime HTTP routes share the UI origin on a loopback server. GET /api/bootstrap returns Bootstrap (token per server process, hasApiKey, allowed answer models). Other API requests need X-Callside-Token. POST /api/key {apiKey} stores a key in process memory only, responds {hasApiKey}. Environment key also supported. No provider key returned to renderer.
+All runtime HTTP routes share the UI origin on a loopback server. GET /api/bootstrap returns Bootstrap (token per server process, hasApiKey, allowed answer models), and optional keyStorage {canRemember,saved,error?} when the desktop secure store is configured. Other API requests need X-Callside-Token. POST /api/key {apiKey,remember?:boolean} replaces the active key, optionally persisting encrypted ciphertext through the desktop keyStore injected into startServer. Omitting remember or setting it false removes any previous saved key. An empty apiKey clears both session and saved key. Responses contain {hasApiKey,keyStorage?}, never the key. Updates are serialized; failed storage operations preserve the previous active key. Environment key also supported, with a successfully loaded saved key taking precedence.
 
 POST /api/answer takes AnswerRequest and streams SSE data: JSON AnswerEvent. Abort cancels provider. mode:auto uses a WAIT sentinel hidden from UI when model judges no intervention. demo:true provides deterministic, clearly marked local fixture responses without network.
 
@@ -11,6 +11,8 @@ POST /api/diarize accepts JSON {audio:base64 WAV, source, chunkId, timestamp, la
 src/audio/capture.ts exports async startCapture(settings:Settings, token:string, callbacks:CaptureCallbacks):Promise<CaptureHandle>. Calls native/browser getDisplayMedia for system source and getUserMedia for mic. Separate sources, AudioWorklet PCM16 24kHz client VAD. Realtime and diarized modes selectable. stop() flushes final speech, cancels tracks, drains pending transcriptions boundedly.
 
 desktop/main.cjs boots built server via exported startServer({port:0,production:true}) -> {url,close}. Loads url in sandboxed window. Preload exposes window.callsideDesktop {onAnswer(callback):()=>void, setAlwaysOnTop(boolean):Promise<void>, platform:string}. Global CommandOrControl+Shift+Space sends callside:answer. Package scripts own build.
+
+desktop/key-store.cjs uses async Electron safeStorage and atomic private-file writes. Startup restoration never exposes a read-key IPC method. The renderer uses the existing authenticated local HTTP key route. src/audio/reconcile.ts retains original transcript revisions in memory and builds a view that removes blank turns and optional near-simultaneous microphone echo copies. The filtered view is used by the transcript, answer context, and exports; disabling the filter restores the original nonblank entries. settings.filterMicrophoneEcho defaults to true for existing templates.
 
 ## Answer model settings
 

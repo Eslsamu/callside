@@ -34,6 +34,16 @@ try {
       !captureConfig.nativeAudio,
     );
   console.log('Desktop capture configuration:', captureConfig);
+  expect(
+    await app.evaluate(({ safeStorage }) => ({
+      encrypt: typeof safeStorage.encryptStringAsync,
+      decrypt: typeof safeStorage.decryptStringAsync,
+    })),
+  ).toEqual({ encrypt: 'function', decrypt: 'function' });
+  await page.getByRole('button', { name: 'Settings', exact: true }).click();
+  await expect(page.getByLabel('Remember API key on this device')).toBeChecked();
+  await expect(page.getByRole('button', { name: 'Save API key', exact: true })).toBeDisabled();
+  await page.getByRole('button', { name: 'Conversation', exact: true }).click();
   expect(await page.evaluate(() => typeof window.callsideDesktop?.onAnswer)).toBe('function');
   expect(await page.evaluate(() => window.callsideDesktop.getShortcutStatus())).toEqual([
     { accelerator: 'F8', registered: false },

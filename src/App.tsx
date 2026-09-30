@@ -29,6 +29,7 @@ import type {
   TranscriptEntry,
 } from '../shared/types';
 import { startCapture } from './audio/capture';
+import { TranscriptReconciler } from './audio/reconcile';
 import { streamAnswer } from './api';
 import { DEMO_TURNS, safeSettings, sessionMarkdown } from './session';
 
@@ -78,6 +79,7 @@ export default function App() {
   const [notice, setNotice] = useState('');
   const [apiKey, setApiKey] = useState('');
   const [keyBusy, setKeyBusy] = useState(false);
+  const [rememberKey, setRememberKey] = useState(true);
   const [pin, setPin] = useState(false);
   const [elapsed, setElapsed] = useState(0);
   const [devices, setDevices] = useState<MediaDeviceInfo[]>([]);
@@ -101,6 +103,8 @@ export default function App() {
   const transcriptEnd = useRef<HTMLDivElement>(null);
   const followTranscript = useRef(true);
   const shortcuts = useRef<Record<string, boolean>>({});
+  const reconciler = useRef(new TranscriptReconciler());
+  const echoNotified = useRef(false);
 
   useEffect(() => {
     const abort = new AbortController();
@@ -145,15 +149,19 @@ export default function App() {
     if (followTranscript.current) transcriptEnd.current?.scrollIntoView({ block: 'nearest' });
   }, [entries]);
 
+  useEffect(() => {
+    setEntries(reconciler.current.view(settings.filterMicrophoneEcho).entries);
+  }, [settings.filterMicrophoneEcho]);
   const addEntry = useCallback((entry: TranscriptEntry) => {
-    setEntries((current) => {
-      const index = current.findIndex((item) => item.id === entry.id);
-      if (index === -1) return [...current, entry].sort((a, b) => a.timestamp - b.timestamp);
-      const next = [...current];
-      if (next[index].final && !entry.final) return current;
-      next[index] = entry;
-      return next.sort((a, b) => a.timestamp - b.timestamp);
-    });
+    reconciler.current.accept(entry);
+    const result = reconciler.current.view(latest.current.settings.filterMicrophoneEcho);
+    setEntries(result.entries);
+    if (result.echoCount && !echoNotified.current) {
+      echoNotified.current = true;
+      setNotice(
+        'Matching microphone echo was filtered. Headphones help prevent the call audio entering your microphone. You can disable the filter in Audio sources.',
+      );
+    }
   }, []);
 
   const requestAnswer = useCallback(async (mode: 'manual' | 'auto', typed = '') => {
@@ -302,6 +310,8 @@ export default function App() {
     demoTimers.current.forEach(clearTimeout);
     demoTimers.current = [];
     setEntries([]);
+    reconciler.current.clear();
+    echoNotified.current = false;
     setSuggestions([]);
     setElapsed(0);
     setQuestion('');
@@ -400,21 +410,30 @@ export default function App() {
     }
   }
 
-  async function saveKey() {
-    if (!bootstrap || !apiKey.trim()) return;
+  async function saveKey(remove = false) {
+    if (!bootstrap || (!remove && !apiKey.trim())) return;
     setKeyBusy(true);
     setError('');
     try {
       const response = await fetch('/api/key', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'X-Callside-Token': bootstrap.token },
-        body: JSON.stringify({ apiKey: apiKey.trim() }),
+        body: JSON.stringify({
+          apiKey: remove ? '' : apiKey.trim(),
+          remember: !remove && Boolean(bootstrap.keyStorage?.canRemember && rememberKey),
+        }),
       });
       const data = await response.json();
       if (!response.ok) throw new Error(data.error || 'Could not apply the key.');
-      setBootstrap({ ...bootstrap, hasApiKey: data.hasApiKey });
+      setBootstrap({ ...bootstrap, hasApiKey: data.hasApiKey, keyStorage: data.keyStorage });
       setApiKey('');
-      setNotice('Key added for this session. It will be validated on the first API request.');
+      setNotice(
+        remove
+          ? 'Key removed from this session and secure storage.'
+          : data.keyStorage?.saved
+            ? 'API key saved securely. It will load automatically after restarting Callside.'
+            : 'Key added for this session. It will be validated on the first API request.',
+      );
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Could not apply the key.');
     } finally {
@@ -903,7 +922,11 @@ export default function App() {
               </p>
               <div className="key-state">
                 <span className={`status-dot ${bootstrap?.hasApiKey ? 'live' : ''}`} />
-                {bootstrap?.hasApiKey ? 'API key added' : 'No API key added'}
+                {bootstrap?.hasApiKey
+                  ? bootstrap.keyStorage?.saved
+                    ? 'API key saved on this device'
+                    : 'API key added'
+                  : 'No API key added'}
               </div>
               <label>
                 OpenAI API key
@@ -915,16 +938,46 @@ export default function App() {
                   onChange={(e) => setApiKey(e.target.value)}
                 />
               </label>
+              {bootstrap?.keyStorage?.canRemember && (
+                <label className="checkbox-label">
+                  <input
+                    type="checkbox"
+                    checked={rememberKey}
+                    disabled={keyBusy || live}
+                    onChange={(event) => setRememberKey(event.target.checked)}
+                  />
+                  Remember API key on this device
+                </label>
+              )}
+              {bootstrap?.keyStorage?.error && (
+                <p role="alert" className="field-help">
+                  {bootstrap.keyStorage.error}
+                </p>
+              )}
               <button
                 className="secondary-button"
                 disabled={!apiKey.trim() || keyBusy || !bootstrap || live}
                 onClick={() => void saveKey()}
               >
-                {keyBusy ? 'Applying …' : 'Use key for this session'}
+                {keyBusy
+                  ? 'Applying …'
+                  : bootstrap?.keyStorage?.canRemember && rememberKey
+                    ? 'Save API key'
+                    : 'Use key for this session'}
               </button>
+              {(bootstrap?.hasApiKey || bootstrap?.keyStorage?.saved) && (
+                <button
+                  className="text-button"
+                  disabled={keyBusy || live}
+                  onClick={() => void saveKey(true)}
+                >
+                  Remove API key
+                </button>
+              )}
               <p className="field-help">
-                The key stays in local server memory. Alternatively, set OPENAI_API_KEY in your
-                local .env file.
+                {bootstrap?.keyStorage?.canRemember
+                  ? 'Remembered keys are encrypted using the operating system key store. Session-only mode removes any previously saved key. The key is never stored in templates or exports.'
+                  : 'The key stays in local server memory. For persistence, set OPENAI_API_KEY in your local .env file or use the desktop app.'}
               </p>
             </section>
             <section className="settings-section">
@@ -1069,6 +1122,19 @@ export default function App() {
                   />
                   Transcribe call audio
                 </label>
+                <label className="checkbox-label">
+                  <input
+                    type="checkbox"
+                    checked={settings.filterMicrophoneEcho}
+                    onChange={(event) => update('filterMicrophoneEcho', event.target.checked)}
+                  />
+                  Filter microphone echo duplicates
+                </label>
+                <p className="field-help">
+                  Keeps the call track when near-identical speech starts on both channels within 750
+                  ms. Short answers and later repetitions are kept. This is an echo filter, not
+                  speaker identification. Headphones are recommended.
+                </p>
                 <div className="field-row">
                   <label>
                     Call track label

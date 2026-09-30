@@ -88,6 +88,132 @@ test.afterEach(async ({ page }) => {
   ).toBe(0);
 });
 
+test('remembered API key controls save, reload without exposing the key, and remove', async ({
+  page,
+}) => {
+  let saved = false;
+  let active = false;
+  const requests: Array<{ apiKey: string; remember: boolean }> = [];
+  await page.route('**/api/bootstrap', async (route) => {
+    const response = await route.fetch();
+    await route.fulfill({
+      json: {
+        ...(await response.json()),
+        hasApiKey: active,
+        keyStorage: { canRemember: true, saved },
+      },
+    });
+  });
+  await page.route('**/api/key', async (route) => {
+    const payload = route.request().postDataJSON();
+    requests.push(payload);
+    active = Boolean(payload.apiKey);
+    saved = active && payload.remember;
+    await route.fulfill({ json: { hasApiKey: active, keyStorage: { canRemember: true, saved } } });
+  });
+  await page.reload();
+  await page.getByRole('button', { name: 'Settings', exact: true }).click();
+  await expect(page.getByLabel('Remember API key on this device')).toBeChecked();
+  await page.getByLabel('OpenAI API key', { exact: true }).fill('sk-synthetic-ui-test-key');
+  await page.getByRole('button', { name: 'Save API key', exact: true }).click();
+  await expect(page.getByText('API key saved on this device', { exact: true })).toBeVisible();
+  expect(requests[0]).toEqual({ apiKey: 'sk-synthetic-ui-test-key', remember: true });
+  await expect(page.getByLabel('OpenAI API key', { exact: true })).toHaveValue('');
+  expect(await page.evaluate(() => JSON.stringify(localStorage))).not.toContain('sk-synthetic');
+  await page.reload();
+  await page.getByRole('button', { name: 'Settings', exact: true }).click();
+  await expect(page.getByText('API key saved on this device', { exact: true })).toBeVisible();
+  await expect(page.getByLabel('OpenAI API key', { exact: true })).toHaveValue('');
+  await page.getByRole('button', { name: 'Remove API key', exact: true }).click();
+  await expect(page.getByText('No API key added', { exact: true })).toBeVisible();
+  expect(requests[1]).toEqual({ apiKey: '', remember: false });
+  await page.reload();
+  await page.getByRole('button', { name: 'Settings', exact: true }).click();
+  await expect(page.getByText('No API key added', { exact: true })).toBeVisible();
+});
+
+test('live two-channel capture filters microphone echoes in the transcript and exported JSON', async ({
+  page,
+}) => {
+  await page.route('**/api/bootstrap', async (route) => {
+    const response = await route.fetch();
+    await route.fulfill({ json: { ...(await response.json()), hasApiKey: true } });
+  });
+  await page.routeWebSocket(/\/api\/realtime\?/, (socket) => {
+    socket.onMessage((message) => {
+      const event = JSON.parse(message.toString());
+      if (event.type === 'configure') socket.send(JSON.stringify({ type: 'ready' }));
+      if (event.type === 'input_audio_buffer.commit') {
+        socket.send(
+          JSON.stringify({ type: 'input_audio_buffer.committed', item_id: 'synthetic-echo' }),
+        );
+        socket.send(
+          JSON.stringify({
+            type: 'conversation.item.input_audio_transcription.completed',
+            item_id: 'synthetic-echo',
+            transcript: 'The delivery time is two weeks.',
+          }),
+        );
+      }
+    });
+  });
+  await page.addInitScript(() => {
+    const gains: GainNode[] = [];
+    (window as unknown as { __echoGains: GainNode[] }).__echoGains = gains;
+    const syntheticStream = async () => {
+      const context = new AudioContext();
+      const oscillator = context.createOscillator(),
+        gain = context.createGain();
+      const destination = context.createMediaStreamDestination();
+      gain.gain.value = 0.25;
+      oscillator.connect(gain).connect(destination);
+      oscillator.start();
+      await context.resume();
+      gains.push(gain);
+      return destination.stream;
+    };
+    Object.defineProperty(navigator.mediaDevices, 'getUserMedia', {
+      configurable: true,
+      value: syntheticStream,
+    });
+    Object.defineProperty(navigator.mediaDevices, 'getDisplayMedia', {
+      configurable: true,
+      value: syntheticStream,
+    });
+  });
+  await page.reload();
+  await page.getByLabel('Everyone knows about transcription.').check();
+  await page.getByRole('button', { name: 'Start call', exact: true }).click();
+  await expect(page.getByRole('button', { name: 'End call', exact: true })).toBeVisible();
+  await expect
+    .poll(async () =>
+      page.getByRole('meter', { name: 'Microphone level' }).getAttribute('aria-valuenow'),
+    )
+    .not.toBe('0');
+  await expect
+    .poll(async () => page.getByRole('meter', { name: 'Call level' }).getAttribute('aria-valuenow'))
+    .not.toBe('0');
+  await page.evaluate(() => {
+    for (const gain of (window as unknown as { __echoGains: GainNode[] }).__echoGains)
+      gain.gain.value = 0;
+  });
+  await expect(page.getByText(/^Matching microphone echo was filtered/)).toBeVisible();
+  await expect(page.getByTestId('transcript-entry')).toHaveCount(1);
+  await expect(page.getByTestId('transcript-entry')).toContainText('Other speaker');
+  await page.getByRole('button', { name: 'End call', exact: true }).click();
+  await page.getByLabel('Export session', { exact: true }).click();
+  const download = page.waitForEvent('download');
+  await page.getByRole('button', { name: 'Session as JSON', exact: true }).click();
+  const path = await (await download).path();
+  const exported = JSON.parse(await readFile(path!, 'utf8'));
+  expect(exported.transcript).toHaveLength(1);
+  expect(exported.transcript[0]).toMatchObject({ source: 'system', speaker: 'Other speaker' });
+  await page.getByRole('button', { name: 'Settings', exact: true }).click();
+  await page.getByLabel('Filter microphone echo duplicates').uncheck();
+  await page.getByRole('button', { name: 'Conversation', exact: true }).click();
+  await expect(page.getByTestId('transcript-entry')).toHaveCount(2);
+});
+
 test('demo produces a transcript and answers typed questions and F8 without a key', async ({
   page,
 }) => {
