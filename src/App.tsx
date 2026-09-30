@@ -1098,6 +1098,12 @@ export default function App() {
                   <Mic size={15} />
                 </button>
                 <p className="field-help">
+                  {window.callsideDesktop?.platform === 'darwin' && (
+                    <>
+                      System capture records this Mac's playback audio. macOS may request Screen
+                      &amp; System Audio Recording access. Screen video stays on your device.{' '}
+                    </>
+                  )}
                   A virtual audio input can replace system audio when your operating system cannot
                   share it directly. Headphones are recommended.
                 </p>

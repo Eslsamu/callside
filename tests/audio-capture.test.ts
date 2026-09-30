@@ -58,7 +58,9 @@ describe('audio acquisition failures', () => {
       });
       const events = callbacks();
       await expect(startCapture(DEFAULT_SETTINGS, 'synthetic-token', events)).rejects.toThrow(
-        'macOS supplied no live call audio',
+        state === 'missing'
+          ? 'macOS returned a screen stream without an audio track'
+          : 'macOS ended the call audio track before recording started',
       );
       expect(getDisplayMedia).toHaveBeenCalledWith(
         expect.objectContaining({

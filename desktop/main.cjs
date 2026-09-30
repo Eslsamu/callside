@@ -19,10 +19,12 @@ if (smokeTest && process.platform === 'darwin') {
 if (process.platform === 'linux') app.setDesktopName('org.callside.app.desktop');
 // Electron 40 needs the portal flag on some Wayland desktops. Harmless where not supported.
 app.commandLine.appendSwitch('enable-features', 'GlobalShortcutsPortal');
-// Terminal/IDE hosts usually lack NSAudioCaptureUsageDescription. Use Electron's
-// documented Screen & System Audio Recording path for development on macOS.
-// Packaged apps carry the usage description and keep the default CoreAudio path.
-if (process.platform === 'darwin' && !app.isPackaged)
+// Native macOS picking can return video without an audio track. Use Electron's
+// documented Screen & System Audio Recording path and grant loopback explicitly.
+// --native-audio keeps the alternative CoreAudio/system-picker path available.
+const macAudioCompatibility =
+  process.platform === 'darwin' && !process.argv.includes('--native-audio');
+if (macAudioCompatibility)
   app.commandLine.appendSwitch('disable-features', 'MacCatapLoopbackAudioForScreenShare');
 
 let window;
@@ -125,8 +127,8 @@ async function boot() {
         callback({});
         return;
       }
-      // macOS 15+ uses Apple's picker through useSystemPicker. On Windows this callback
-      // supplies a local screen track plus loopback. Linux users can select a monitor input.
+      // In compatibility mode the Start click grants system loopback plus a local
+      // video track, which is required by getDisplayMedia and never sent to OpenAI.
       try {
         const sources = await desktopCapturer.getSources({
           types: ['screen'],
@@ -138,7 +140,8 @@ async function boot() {
         }
         callback({
           video: sources[0],
-          ...(process.platform === 'win32' || process.platform === 'darwin'
+          ...(request.audioRequested &&
+          (process.platform === 'win32' || process.platform === 'darwin')
             ? { audio: 'loopback' }
             : {}),
         });
@@ -146,7 +149,7 @@ async function boot() {
         callback({});
       }
     },
-    { useSystemPicker: true },
+    { useSystemPicker: !macAudioCompatibility },
   );
 
   ipcMain.handle('callside:set-always-on-top', (event, enabled) => {

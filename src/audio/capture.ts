@@ -107,7 +107,7 @@ export async function startCapture(
         );
       if (window.callsideDesktop?.platform === 'darwin')
         throw new Error(
-          'macOS supplied no live call audio. Open the packaged Callside.app directly, allow system audio capture when prompted, and retry. If sharing still fails, select a virtual audio input in Settings.',
+          `${audioTracks.length ? 'macOS ended the call audio track before recording started.' : 'macOS returned a screen stream without an audio track.'} Allow Callside in System Settings > Privacy & Security > Screen & System Audio Recording, then quit and reopen Callside. A virtual audio input can be selected in Settings if capture is still unavailable.`,
         );
       throw new Error(
         'The shared stream supplied no live call audio. Share the call tab with audio enabled, or select a virtual audio input in Settings.',
