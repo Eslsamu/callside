@@ -19,9 +19,13 @@ Full desktop audio capture varies by browser and OS. If the selected surface sup
 
 The desktop packaging configuration includes microphone, audio capture, and screen capture usage descriptions. A development Electron process and a packaged Callside app can have different permission entries. Granting permission to one does not prove the other has permission.
 
+For native call apps such as WhatsApp, enable both **Transcribe microphone** and **Transcribe call audio**, and keep **Call audio source** set to **System / shared tab**. Open the packaged **Callside.app** directly in Finder for the first test, allow audio capture when macOS prompts, and check the **Other speaker** meter while the other person speaks. Keep the call app running when restarting Callside.
+
+Electron's default CoreAudio capture path requires the terminal or IDE hosting a development launch to have its own audio usage description. Callside uses Electron's documented Screen & System Audio Recording compatibility path for development launches; packaged apps retain the default path. See [Electron's macOS capture caveats](https://www.electronjs.org/docs/latest/api/desktop-capturer#macos-versions-142-or-higher). A stream with no live audio track fails before any API connection is opened; Callside does not silently continue with only the microphone.
+
 Some combinations of Electron, macOS, and device routing do not provide system audio through the selected capture path. For those systems, route the call through a loopback device and choose that device in Callside. If both you and the other participant are mixed into one input, use diarization and remember that speaker IDs are per block. Configure routing yourself; Callside does not install audio drivers or change the system's default devices.
 
-The repository builds unsigned desktop packages by default. A maintainer distributing public macOS builds should configure code signing and notarization. Local package generation alone does not establish that every installed user's privacy permissions or audio routing will work.
+No signing identity is included in the repository. Electron Builder can automatically discover an identity on your Mac. To skip that discovery for a local test, run `CSC_IDENTITY_AUTO_DISCOVERY=false npm run desktop:pack`. A maintainer distributing public macOS builds should configure code signing and notarization. Local package generation alone does not establish that every installed user's privacy permissions or audio routing will work.
 
 ## Windows
 

@@ -20,6 +20,15 @@ try {
   expect(
     await app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0].isVisible()),
   ).toBe(false);
+  const captureConfig = await app.evaluate(({ app }) => ({
+    platform: process.platform,
+    packaged: app.isPackaged,
+    disabledFeatures: app.commandLine.getSwitchValue('disable-features'),
+  }));
+  if (captureConfig.platform === 'darwin')
+    expect(captureConfig.disabledFeatures.includes('MacCatapLoopbackAudioForScreenShare')).toBe(
+      !captureConfig.packaged,
+    );
   expect(await page.evaluate(() => typeof window.callsideDesktop?.onAnswer)).toBe('function');
   expect(await page.evaluate(() => window.callsideDesktop.getShortcutStatus())).toEqual([
     { accelerator: 'F8', registered: false },

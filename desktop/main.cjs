@@ -19,6 +19,11 @@ if (smokeTest && process.platform === 'darwin') {
 if (process.platform === 'linux') app.setDesktopName('org.callside.app.desktop');
 // Electron 40 needs the portal flag on some Wayland desktops. Harmless where not supported.
 app.commandLine.appendSwitch('enable-features', 'GlobalShortcutsPortal');
+// Terminal/IDE hosts usually lack NSAudioCaptureUsageDescription. Use Electron's
+// documented Screen & System Audio Recording path for development on macOS.
+// Packaged apps carry the usage description and keep the default CoreAudio path.
+if (process.platform === 'darwin' && !app.isPackaged)
+  app.commandLine.appendSwitch('disable-features', 'MacCatapLoopbackAudioForScreenShare');
 
 let window;
 let server;

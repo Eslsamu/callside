@@ -95,10 +95,24 @@ export async function startCapture(
     const stream = await request;
     const capture: SourceCapture = { source, stream };
     sources.push(capture);
-    if (!stream.getAudioTracks().length)
+    const audioTracks = stream.getAudioTracks();
+    if (!audioTracks.some((track) => track.readyState === 'live')) {
+      if (source === 'mic')
+        throw new Error(
+          'The microphone supplied no live audio. Select another microphone in Settings.',
+        );
+      if (settings.systemDeviceId)
+        throw new Error(
+          'The call audio input supplied no live audio. Select another input in Settings.',
+        );
+      if (window.callsideDesktop?.platform === 'darwin')
+        throw new Error(
+          'macOS supplied no live call audio. Open the packaged Callside.app directly, allow system audio capture when prompted, and retry. If sharing still fails, select a virtual audio input in Settings.',
+        );
       throw new Error(
-        'The shared stream has no system audio. Enable audio sharing, use the desktop app, or select a virtual audio input.',
+        'The shared stream supplied no live call audio. Share the call tab with audio enabled, or select a virtual audio input in Settings.',
       );
+    }
     // Display capture requires a video track. It stays local and is released with the session.
     for (const track of stream.getTracks())
       track.onended = () => {
@@ -130,7 +144,9 @@ export async function startCapture(
         : navigator.mediaDevices.getDisplayMedia({
             audio: true,
             video: { width: 320, height: 180, frameRate: 1 },
-          });
+            // Explicitly request system audio; the chosen surface must still supply a live track.
+            systemAudio: 'include',
+          } as DisplayMediaStreamOptions & { systemAudio: 'include' });
       requests.push(acquire('system', request));
     }
     if (settings.captureMic) {
