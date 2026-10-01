@@ -5,7 +5,8 @@ import { randomBytes, timingSafeEqual } from 'node:crypto';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import type { ViteDevServer } from 'vite';
-import type { AnswerEvent } from '../shared/types.js';
+import type { AnswerEvent, TokenUsage } from '../shared/types.js';
+import { MAX_CONTEXT_CHARACTERS } from '../shared/tasks.js';
 import { answerSchema, decodeWav, diarizeSchema, keySchema } from './validation.js';
 import {
   AutoGate,
@@ -215,7 +216,11 @@ export async function startServer(options: ServerOptions = {}): Promise<RunningS
   app.post('/api/answer', async (req, res) => {
     const parsed = answerSchema.safeParse(req.body);
     if (!parsed.success) {
-      res.status(400).json({ error: 'Invalid settings or conversation data.' });
+      res.status(400).json({
+        error: parsed.error.issues.some((issue) => issue.path.join('.') === 'settings.context')
+          ? `Reference material must contain at most ${MAX_CONTEXT_CHARACTERS.toLocaleString('en-US')} characters.`
+          : 'Invalid settings or conversation data.',
+      });
       return;
     }
     const request = parsed.data;
@@ -240,6 +245,7 @@ export async function startServer(options: ServerOptions = {}): Promise<RunningS
     let complete = false;
     let outputSize = 0;
     let hasText = false;
+    let usage: TokenUsage | undefined;
     try {
       const stream = request.demo
         ? demoAnswer(request, signal)
@@ -255,11 +261,14 @@ export async function startServer(options: ServerOptions = {}): Promise<RunningS
             send({ type: 'delta', text });
             hasText = true;
           }
-        } else complete = true;
+        } else {
+          complete = true;
+          usage = event.usage;
+        }
       }
       if (!complete) throw new PublicError('The answer stream ended unexpectedly.');
       const tail = gate?.finish();
-      if (tail?.skip) send({ type: 'skip' });
+      if (tail?.skip) send({ type: 'skip', ...(usage ? { usage } : {}) });
       else {
         if (tail?.text) {
           send({ type: 'delta', text: tail.text });
@@ -267,7 +276,7 @@ export async function startServer(options: ServerOptions = {}): Promise<RunningS
         }
         if (!hasText)
           throw new PublicError('The model returned no text. Check the model or output limit.');
-        send({ type: 'done' });
+        send({ type: 'done', ...(usage ? { usage } : {}) });
       }
     } catch (error) {
       send({ type: 'error', message: publicError(error) });

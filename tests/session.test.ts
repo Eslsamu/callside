@@ -94,10 +94,9 @@ describe('GPT-6 settings migration', () => {
     expect(restored.systemPrompt).toBe('My custom prompt');
     expect(restored.fastMode).toBe(false);
   });
-  it('moves unsupported Astra reasoning to low', () => {
-    expect(
-      safeSettings({ model: 'gpt-6-astra', reasoningEffort: 'none' }, DEFAULT_SETTINGS)
-        .reasoningEffort,
-    ).toBe('low');
+  it.each(['gpt-6-astra', 'gpt-6.1-sol'])('moves unsupported %s reasoning to low', (model) => {
+    expect(safeSettings({ model, reasoningEffort: 'none' }, DEFAULT_SETTINGS).reasoningEffort).toBe(
+      'low',
+    );
   });
 });

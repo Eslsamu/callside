@@ -59,3 +59,7 @@ Run these checks with your own API project, a short synthetic conversation, and 
 - Record any untested OS, hardware, or model combinations in the release notes.
 
 The initial repository does not claim real-audio or cross-platform hardware certification. These acceptance checks remain a maintainer/operator step on the actual devices used for calls.
+
+## Tasks and reference context
+
+Task tests cover full reference preservation, stable cache prefixes across manual/automatic modes and changing commands, exact-default migration, custom prompt/budget preservation, and the shared reference size limit. Provider mocks verify explicit caching request shape, omitted output cap in model-default mode, and usage reporting. Browser tests exercise the Workshop preset, long-reference save/reload, F8 before speech, oversized paste validation without truncation, reference-only export, and microphone-triggered automatic checks. All model results and usage counts are synthetic. Actual model quality, latency, and cache reuse require a user-authorized API session with representative course material.

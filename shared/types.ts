@@ -42,7 +42,9 @@ export interface Settings {
   systemPrompt: string;
   autoPrompt: string;
   context: string;
-  maxOutputTokens: number;
+  /** null leaves the output token limit to the model. */
+  maxOutputTokens: number | null;
+  autoTriggerSource: Source | 'either';
   autoCooldownMs: number;
   captureMode: CaptureMode;
   captureMic: boolean;
@@ -65,9 +67,23 @@ export interface AnswerRequest {
 }
 export type AnswerEvent =
   | { type: 'delta'; text: string }
-  | { type: 'done' }
-  | { type: 'skip' }
+  | { type: 'done'; usage?: TokenUsage }
+  | { type: 'skip'; usage?: TokenUsage }
   | { type: 'error'; message: string };
+export interface TokenUsage {
+  inputTokens: number;
+  outputTokens: number;
+  cachedInputTokens: number;
+  cacheWriteTokens?: number;
+  reasoningTokens?: number;
+}
+export interface RequestUsage {
+  timestamp: number;
+  model: string;
+  mode: 'manual' | 'auto';
+  skipped: boolean;
+  usage: TokenUsage;
+}
 export interface Suggestion {
   id: string;
   text: string;

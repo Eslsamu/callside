@@ -54,14 +54,14 @@ npm start
    In the desktop app, leave **Remember API key on this device** checked and click **Save API key** to reuse it after restarting. **Remove API key** clears the saved key and the current session key. Browser users can set `OPENAI_API_KEY` in a local `.env` file.
 3. Choose your model, prompts, context, microphone, and call audio.
 4. Let everyone know about transcription, then start the call and grant audio permissions.
-5. Press **F8**, click **Suggest answer**, or type a question. Enable **Automatic hints** for prompt-controlled assistance.
+5. Press **F8**, click **Run task**, or enter a command. Enable **Automatic hints** for prompt-controlled assistance.
 6. End the call and export the session as JSON or Markdown if needed.
 
 ## ChatGPT subscription or API key?
 
 This version uses a **Platform API key**. It does not log into ChatGPT, reuse browser cookies, or read Codex credentials. ChatGPT sign-in is available for supported OpenAI products; OpenAI's authentication documentation directs general API calls to Platform API keys, with API usage billed through the Platform account. A ChatGPT subscription is therefore not configured as payment for Callside's transcription or Responses requests. See the [official OpenAI authentication documentation](https://learn.chatgpt.com/docs/auth#openai-authentication).
 
-The defaults are `gpt-live-transcribe` for live transcription, `gpt-4o-transcribe-diarize` for the diarization mode, and `gpt-6-luna` for answers. Access depends on your API project. Answer models are restricted to GPT-6 Luna, Sol, and Astra. Reasoning strength is configurable: None, Low, Medium, High, Extra high, or Maximum; Astra starts at Low. Fast mode requests priority processing where available at 2× standard token rates. It is off by default. The output budget includes both reasoning and visible answer tokens. Check [OpenAI API pricing](https://developers.openai.com/api/docs/pricing) and your project limits before a long call. Automatic mode can make repeated model requests, including requests whose result is silence.
+The defaults are `gpt-live-transcribe` for live transcription, `gpt-4o-transcribe-diarize` for the diarization mode, and `gpt-6-luna` for tasks. Access depends on your API project. Task models are restricted to GPT-6 Luna, GPT-6 Sol, GPT-6.1 Sol, and GPT-6 Astra. Reasoning strength is configurable: None, Low, Medium, High, Extra high, or Maximum; Astra and GPT-6.1 Sol start at Low. Fast mode requests priority processing where available at 2× standard token rates. It is off by default. The output budget includes both reasoning and visible answer tokens. Check [OpenAI API pricing](https://developers.openai.com/api/docs/pricing) and your project limits before a long call. Automatic mode can make repeated model requests, including requests whose result is silence.
 
 ## Choosing an audio mode
 
@@ -83,15 +83,31 @@ Overlapping speech, echo, and poor audio can reduce accuracy. Use headphones to 
 
 In browser mode, choose a shareable tab or surface and enable its audio-sharing option. Support for full system audio depends on the browser and OS. The desktop app provides an additional Electron capture path. If your call's audio cannot be shared, use **Load audio inputs** and select a virtual loopback device under **Call audio source**. This keeps remote audio on the call channel used by automatic hints. See [audio setup and troubleshooting](docs/TROUBLESHOOTING.md).
 
-## Make suggestions useful
+## Configure a task and reference material
 
-Put stable instructions in the answer prompt: desired language, tone, response length, and what the assistant must never invent. Put call-specific facts in the context field, such as the agenda, product facts, prices, and what you are allowed to promise.
+Put behavior in **Task instructions** and course notes, documentation, or other facts in **Reference material**. The application supports explanations, hints, corrections, summaries, and typed commands. Presets set the task, automatic rule, and trigger source. Your reference material stays in place. Exact old default prompts migrate to general task instructions; custom saved instructions and existing numeric output budgets are preserved.
 
-For automatic mode, describe **when** to speak up. For example:
+Reference material supports up to **100,000 characters**. The UI shows the count and retains oversized pasted text, but blocks task requests until it is shortened. The entire reference material is included with every request. Conversation history is a separate rolling window: the newest 120 transcript entries, bounded to 24,000 text characters. Callside does not retain the full workshop history in each model request.
 
-> Suggest a short answer when the customer asks a direct question or raises an objection. Stay quiet during small talk and while I am speaking. If facts are missing, suggest one precise follow-up question.
+### Workshop setup
 
-Automatic mode evaluates finalized transcript updates, observes a cooldown, and includes previous suggestions to reduce repetition. It may miss an opportunity or intervene at the wrong moment. Manual triggering remains available. Suggestions are text only; Callside does not speak into the call or send messages to participants.
+1. Open **Settings** and choose **Workshop** under **How your assistant should help**.
+2. Paste the course notes into **Reference material**. Include section names, exercise identifiers, and official solutions where available.
+3. Choose **GPT-6.1 Sol**, **Low** reasoning, and **Model default** under **Output token limit**. Fast mode is optional and costs more.
+4. Click **Save template**, return to **Conversation**, and leave **Automatic hints** off for the first test.
+5. Press **F8**, **Command/Ctrl+Shift+Space**, or **Run task**. Enter a **Command** for a specific request such as “Explain exercise 7” or “Draft notes on the decision.”
+
+Manual triggering can use partial transcript text and works with reference material before anyone has spoken. Workshop instructions favor exercise hints unless you request a solution or the discussion calls for one. They ask for source identifiers where supplied and distinguish official solutions from the model's own examples.
+
+For automatic assistance, select **Automatic trigger source**: **Other speakers (call audio)**, **Me (microphone)**, or **Either**. Workshop selects Either. The app checks the **Automatic mode prompt** after finalized segments from the selected audio source, with a cooldown and duplicate-turn suppression. These source choices describe audio channels; microphone bleed can still affect attribution. Checks that produce no result also consume API tokens. Automatic hints can miss opportunities or intervene at the wrong moment.
+
+### Reference caching and output limits
+
+Requests put stable application instructions, task instructions, and the automatic rule first, then the complete reference material in a separate data message with an explicit cache breakpoint. Mode instructions, recent transcript, previous results, and commands follow that boundary. The provider uses explicit caching with a 30-minute minimum TTL, so changing commands or switching manual/automatic mode preserves the earlier prefix. Cache reuse depends on provider behavior and unchanged settings/material; it is not guaranteed.
+
+Session JSON exports include `requestUsage` for completed requests and intentional automatic skips when OpenAI reports usage. This records input, output, cached input, cache-write, and reasoning tokens where available. Failed or cancelled requests may incur usage that is not included. No document index, vector store, or embedding service is created. See [OpenAI prompt caching](https://developers.openai.com/api/docs/guides/prompt-caching).
+
+**Model default** omits the custom output token cap. A **Custom limit** bounds generated reasoning plus visible output, not input context. Existing request timeouts and stream-size safeguards still apply. Concision comes from the task instructions; the model is not asked to fill its budget. Results are text only: Callside does not speak into the call or send messages to participants.
 
 ## Privacy and boundaries
 

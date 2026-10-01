@@ -1,4 +1,5 @@
 import { ANSWER_MODELS, REASONING_EFFORTS, reasoningOptions } from '../shared/models.js';
+import { MAX_CONTEXT_CHARACTERS } from '../shared/tasks.js';
 import { z } from 'zod';
 import { DEFAULT_SETTINGS } from '../shared/defaults.js';
 
@@ -20,8 +21,9 @@ export const settingsSchema = z
     language,
     systemPrompt: z.string().max(12000),
     autoPrompt: z.string().max(12000),
-    context: z.string().max(20000),
-    maxOutputTokens: z.number().int().min(1).max(100000),
+    context: z.string().max(MAX_CONTEXT_CHARACTERS),
+    maxOutputTokens: z.number().int().min(1).max(100000).nullable().default(null),
+    autoTriggerSource: z.enum(['system', 'mic', 'either']).default('system'),
     autoCooldownMs: z.number().int().min(1000).max(120000),
     captureMode: z.enum(['realtime', 'diarized']),
     captureMic: z.boolean(),

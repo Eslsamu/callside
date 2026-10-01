@@ -290,3 +290,25 @@ describe('local HTTP API', () => {
     two.abort();
   });
 });
+
+it.each([false, true])(
+  'preserves reported cache usage in terminal events (skip=%s)',
+  async (skip) => {
+    const usage = {
+      inputTokens: 10500,
+      outputTokens: 130,
+      cachedInputTokens: 10000,
+      cacheWriteTokens: 0,
+      reasoningTokens: 100,
+    };
+    const server = await running({
+      ...simpleProvider([]),
+      async *answer() {
+        yield { type: 'delta', text: skip ? WAIT_SENTINEL : 'A useful hint.' };
+        yield { type: 'done', usage };
+      },
+    });
+    const response = await server.post('/api/answer', body({ mode: 'auto' }));
+    expect(events(await response.text()).at(-1)).toEqual({ type: skip ? 'skip' : 'done', usage });
+  },
+);

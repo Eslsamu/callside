@@ -178,9 +178,7 @@ async function boot() {
   }));
   for (const shortcut of shortcutStatus) {
     if (!shortcut.registered && !smokeTest)
-      console.warn(
-        `Callside: shortcut ${shortcut.accelerator} is unavailable; use the answer button.`,
-      );
+      console.warn(`Callside: shortcut ${shortcut.accelerator} is unavailable; use Run task.`);
   }
   createWindow();
 }

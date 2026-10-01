@@ -363,16 +363,16 @@ test('demo produces a transcript and answers typed questions and F8 without a ke
 }) => {
   await startDemo(page);
   const question = 'What specific follow-up question should I ask now?';
-  await page.getByLabel('Your question', { exact: true }).fill(question);
+  await page.getByLabel('Command', { exact: true }).fill(question);
   const manualRequest = page.waitForRequest(
     (request) => request.url().endsWith('/api/answer') && request.method() === 'POST',
   );
-  await page.getByRole('button', { name: 'Send question', exact: true }).click();
+  await page.getByRole('button', { name: 'Run command', exact: true }).click();
   const payload = (await manualRequest).postDataJSON();
   expect(payload).toMatchObject({ question, mode: 'manual', demo: true });
   expect(payload.transcript.length).toBeGreaterThan(1);
   await expect(page.getByTestId('suggestion').first()).toBeVisible();
-  await expect(page.getByRole('button', { name: /^Suggest answer/ })).toBeEnabled();
+  await expect(page.getByRole('button', { name: /^Run task/ })).toBeEnabled();
 
   const keyboardRequest = page.waitForRequest(
     (request) => request.url().endsWith('/api/answer') && request.method() === 'POST',
@@ -400,10 +400,10 @@ test('automatic mode requests a contextual demo suggestion', async ({ page }) =>
 test('edited prompts are used in answers and saved only when requested', async ({ page }) => {
   await page.getByRole('button', { name: 'Settings', exact: true }).click();
   await page
-    .getByRole('textbox', { name: 'System prompt', exact: true })
+    .getByRole('textbox', { name: 'Task instructions', exact: true })
     .fill('Answer briefly and ask a follow-up question when facts are missing.');
   await page
-    .getByRole('textbox', { name: 'Conversation context', exact: true })
+    .getByRole('textbox', { name: 'Reference material', exact: true })
     .fill('We are planning a two-week test with exactly three participants.');
   expect(await page.evaluate(() => localStorage.getItem('callside.settings.v1'))).toBeNull();
   await page.getByRole('button', { name: 'Conversation', exact: true }).click();
@@ -411,7 +411,7 @@ test('edited prompts are used in answers and saved only when requested', async (
   const answerRequest = page.waitForRequest(
     (request) => request.url().endsWith('/api/answer') && request.method() === 'POST',
   );
-  await page.getByRole('button', { name: /^Suggest answer/ }).click();
+  await page.getByRole('button', { name: /^Run task/ }).click();
   expect((await answerRequest).postDataJSON().settings).toMatchObject({
     systemPrompt: 'Answer briefly and ask a follow-up question when facts are missing.',
     context: 'We are planning a two-week test with exactly three participants.',
@@ -429,13 +429,13 @@ test('edited prompts are used in answers and saved only when requested', async (
   await page.getByRole('button', { name: 'Save template', exact: true }).click();
   await page.reload();
   await page.getByRole('button', { name: 'Settings', exact: true }).click();
-  await expect(
-    page.getByRole('textbox', { name: 'Conversation context', exact: true }),
-  ).toHaveValue('We are planning a two-week test with exactly three participants.');
+  await expect(page.getByRole('textbox', { name: 'Reference material', exact: true })).toHaveValue(
+    'We are planning a two-week test with exactly three participants.',
+  );
   await page.getByRole('button', { name: 'Reset', exact: true }).click();
-  await expect(
-    page.getByRole('textbox', { name: 'Conversation context', exact: true }),
-  ).toHaveValue('');
+  await expect(page.getByRole('textbox', { name: 'Reference material', exact: true })).toHaveValue(
+    '',
+  );
   expect(await page.evaluate(() => localStorage.getItem('callside.settings.v1'))).toBeNull();
 });
 
@@ -597,8 +597,13 @@ test('GPT-6 controls restrict models, normalize Astra reasoning, and persist API
   page,
 }) => {
   await page.getByRole('button', { name: 'Settings', exact: true }).click();
-  const model = page.getByRole('combobox', { name: 'Answer model', exact: true });
-  await expect(model.locator('option')).toHaveText(['GPT-6 Luna', 'GPT-6 Sol', 'GPT-6 Astra']);
+  const model = page.getByRole('combobox', { name: 'Task model', exact: true });
+  await expect(model.locator('option')).toHaveText([
+    'GPT-6 Luna',
+    'GPT-6 Sol',
+    'GPT-6.1 Sol',
+    'GPT-6 Astra',
+  ]);
   await model.selectOption('gpt-6-astra');
   const reasoning = page.getByRole('combobox', { name: 'Reasoning strength', exact: true });
   await expect(reasoning).toHaveValue('low');
@@ -609,6 +614,9 @@ test('GPT-6 controls restrict models, normalize Astra reasoning, and persist API
     'Extra high',
     'Maximum',
   ]);
+  await model.selectOption('gpt-6.1-sol');
+  await expect(reasoning).toHaveValue('low');
+  await expect(reasoning.locator('option[value="none"]')).toHaveCount(0);
   await reasoning.selectOption('high');
   await page.getByLabel('Fast mode', { exact: true }).check();
   await page.getByRole('button', { name: 'Save template', exact: true }).click();
@@ -617,10 +625,106 @@ test('GPT-6 controls restrict models, normalize Astra reasoning, and persist API
   const request = page.waitForRequest(
     (r) => r.url().endsWith('/api/answer') && r.method() === 'POST',
   );
-  await page.getByRole('button', { name: /^Suggest answer/ }).click();
+  await page.getByRole('button', { name: /^Run task/ }).click();
   expect((await request).postDataJSON().settings).toMatchObject({
-    model: 'gpt-6-astra',
+    model: 'gpt-6.1-sol',
     reasoningEffort: 'high',
     fastMode: true,
   });
+});
+
+test('Workshop preserves long references, runs before speech, and exports cache usage', async ({
+  page,
+}) => {
+  const reference = '[Exercise 7]\n' + 'Explain the feedback loop. '.repeat(1500);
+  const usage = {
+    inputTokens: 10500,
+    outputTokens: 130,
+    cachedInputTokens: 10000,
+    cacheWriteTokens: 0,
+    reasoningTokens: 100,
+  };
+  await page.route('**/api/answer', (route) =>
+    route.fulfill({
+      contentType: 'text/event-stream',
+      body: `data: ${JSON.stringify({ type: 'delta', text: 'Start by identifying the feedback loop. [Exercise 7]' })}\n\ndata: ${JSON.stringify({ type: 'done', usage })}\n\n`,
+    }),
+  );
+  await page.getByRole('button', { name: 'Settings', exact: true }).click();
+  await page.getByLabel('Reference material', { exact: true }).fill(reference);
+  await page.getByRole('button', { name: 'Workshop', exact: true }).click();
+  await expect(page.getByLabel('Reference material', { exact: true })).toHaveValue(reference);
+  await expect(
+    page.getByRole('combobox', { name: 'Automatic trigger source', exact: true }),
+  ).toHaveValue('either');
+  await page.getByRole('combobox', { name: 'Task model', exact: true }).selectOption('gpt-6.1-sol');
+  await page
+    .getByRole('combobox', { name: 'Output token limit', exact: true })
+    .selectOption('model');
+  await page.getByRole('button', { name: 'Save template', exact: true }).click();
+  await page.reload();
+  await expect(page.getByRole('button', { name: /^Run task/ })).toBeEnabled();
+  const sent = page.waitForRequest((r) => r.url().endsWith('/api/answer') && r.method() === 'POST');
+  await page.keyboard.press('F8');
+  expect((await sent).postDataJSON()).toMatchObject({
+    transcript: [],
+    mode: 'manual',
+    settings: {
+      context: reference,
+      model: 'gpt-6.1-sol',
+      reasoningEffort: 'low',
+      maxOutputTokens: null,
+      autoTriggerSource: 'either',
+    },
+  });
+  await expect(page.getByTestId('suggestion')).toContainText('[Exercise 7]');
+  await page.getByLabel('Export session', { exact: true }).click();
+  const downloaded = page.waitForEvent('download');
+  await page.getByRole('button', { name: 'Session as JSON', exact: true }).click();
+  const session = JSON.parse(await readFile((await (await downloaded).path())!, 'utf8'));
+  expect(session.requestUsage).toEqual([
+    expect.objectContaining({ model: 'gpt-6.1-sol', skipped: false, usage }),
+  ]);
+  await page.getByRole('button', { name: 'Settings', exact: true }).click();
+  await expect(page.getByLabel('Reference material', { exact: true })).toHaveValue(reference);
+  await expect(page.getByLabel('Task instructions', { exact: true })).toHaveValue(
+    /Participants may move between topics/,
+  );
+});
+
+test('oversized pasted references are retained and block task requests with a clear message', async ({
+  page,
+}) => {
+  const reference = 'x'.repeat(100001);
+  await page.getByRole('button', { name: 'Settings', exact: true }).click();
+  await page.getByLabel('Reference material', { exact: true }).fill(reference);
+  await expect(page.getByLabel('Reference material', { exact: true })).toHaveValue(reference);
+  await expect(page.getByRole('alert')).toContainText('Your pasted text has been kept in full');
+  await page.getByRole('button', { name: 'Conversation', exact: true }).click();
+  await expect(page.getByRole('button', { name: /^Run task/ })).toBeDisabled();
+  await page.keyboard.press('F8');
+  await expect(page.getByRole('alert')).toContainText(
+    'Reference material exceeds 100,000 characters',
+  );
+});
+
+test('automatic microphone trigger waits for a microphone segment', async ({ page }) => {
+  const requests: any[] = [];
+  await page.route('**/api/answer', (route) => {
+    requests.push(route.request().postDataJSON());
+    return route.fulfill({ contentType: 'text/event-stream', body: 'data: {"type":"skip"}\n\n' });
+  });
+  await page.getByRole('button', { name: 'Settings', exact: true }).click();
+  await page
+    .getByRole('combobox', { name: 'Automatic trigger source', exact: true })
+    .selectOption('mic');
+  await page.getByRole('button', { name: 'Conversation', exact: true }).click();
+  await page.getByRole('switch', { name: 'Automatic hints', exact: true }).check();
+  await startDemo(page);
+  await expect.poll(() => requests.length).toBeGreaterThan(0);
+  expect(requests[0]).toMatchObject({ mode: 'auto', settings: { autoTriggerSource: 'mic' } });
+  expect(requests[0].transcript.some((entry: any) => entry.source === 'mic' && entry.final)).toBe(
+    true,
+  );
+  expect(requests[0].transcript.length).toBeGreaterThan(1);
 });

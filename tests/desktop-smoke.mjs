@@ -44,9 +44,20 @@ try {
   await expect(page.getByLabel('Remember API key on this device')).toBeChecked();
   await expect(page.getByLabel('Identify call speakers in the background')).toBeChecked();
   await expect(page.getByRole('button', { name: 'Save API key', exact: true })).toBeDisabled();
+  await page.getByRole('button', { name: 'Workshop', exact: true }).click();
+  await expect(
+    page.getByRole('combobox', { name: 'Automatic trigger source', exact: true }),
+  ).toHaveValue('either');
+  await expect(page.getByRole('combobox', { name: 'Output token limit', exact: true })).toHaveValue(
+    'model',
+  );
+  await expect(page.getByLabel('Task instructions', { exact: true })).toHaveValue(
+    /Participants may move between topics/,
+  );
   if (process.env.CALLSIDE_SMOKE_SCREENSHOT) {
-    await page.getByLabel('Identify call speakers in the background').scrollIntoViewIfNeeded();
-    await page.screenshot({ path: process.env.CALLSIDE_SMOKE_SCREENSHOT });
+    await page
+      .locator('.prompt-settings')
+      .screenshot({ path: process.env.CALLSIDE_SMOKE_SCREENSHOT });
   }
   await page.getByRole('button', { name: 'Conversation', exact: true }).click();
   expect(await page.evaluate(() => typeof window.callsideDesktop?.onAnswer)).toBe('function');
@@ -61,7 +72,7 @@ try {
     BrowserWindow.getAllWindows()[0].webContents.send('callside:answer'),
   );
   await expect(page.getByTestId('suggestion')).toContainText('Demo suggestion');
-  await expect(page.getByRole('button', { name: /^Suggest answer/ })).toBeEnabled();
+  await expect(page.getByRole('button', { name: /^Run task/ })).toBeEnabled();
   await page.evaluate(() => window.callsideDesktop.setAlwaysOnTop(true));
   expect(
     await app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0].isAlwaysOnTop()),

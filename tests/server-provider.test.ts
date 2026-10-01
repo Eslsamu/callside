@@ -48,6 +48,8 @@ describe('OpenAI provider contract (no upstream network)', () => {
         reasoningEffort: 'none',
         fastMode: false,
         instructions: 'Help',
+        referenceMaterial: 'Reference facts',
+        modeInstructions: 'Manual mode',
         input: '{}',
         maxOutputTokens: 300,
       },
@@ -59,8 +61,22 @@ describe('OpenAI provider contract (no upstream network)', () => {
         model: 'gpt-6-luna',
         reasoning: { effort: 'none' },
         service_tier: 'default',
-        instructions: 'Help',
-        input: '{}',
+        input: [
+          { role: 'developer', content: 'Help' },
+          {
+            role: 'user',
+            content: [
+              {
+                type: 'input_text',
+                text: JSON.stringify({ referenceMaterial: 'Reference facts' }),
+                prompt_cache_breakpoint: { mode: 'explicit' },
+              },
+            ],
+          },
+          { role: 'developer', content: 'Manual mode' },
+          { role: 'user', content: '{}' },
+        ],
+        prompt_cache_options: { mode: 'explicit', ttl: '30m' },
         max_output_tokens: 300,
         store: false,
         stream: true,
@@ -84,6 +100,8 @@ describe('OpenAI provider contract (no upstream network)', () => {
             reasoningEffort: 'none',
             fastMode: false,
             instructions: '',
+            referenceMaterial: '',
+            modeInstructions: '',
             input: '',
             maxOutputTokens: 64,
           },
@@ -170,7 +188,7 @@ describe('OpenAI provider contract (no upstream network)', () => {
 });
 
 describe('GPT-6 model parameters', () => {
-  it.each(['gpt-6-luna', 'gpt-6-sol', 'gpt-6-astra'])(
+  it.each(['gpt-6-luna', 'gpt-6-sol', 'gpt-6.1-sol', 'gpt-6-astra'])(
     'sends reasoning and Fast parameters for %s',
     async (model) => {
       mocked.responses.mockResolvedValue(
@@ -185,6 +203,8 @@ describe('GPT-6 model parameters', () => {
           reasoningEffort: 'high',
           fastMode: true,
           instructions: 'Help',
+          referenceMaterial: 'Reference facts',
+          modeInstructions: 'Manual mode',
           input: '{}',
           maxOutputTokens: 4096,
         },
@@ -219,4 +239,62 @@ it('rejects unsupported answer models and Astra without reasoning before provide
     settingsSchema.safeParse({ ...DEFAULT_SETTINGS, model: 'gpt-6-astra', reasoningEffort: 'max' })
       .success,
   ).toBe(true);
+});
+
+it('accepts GPT-6.1 Sol with supported reasoning and rejects none', () => {
+  for (const reasoningEffort of ['low', 'medium', 'high', 'xhigh', 'max']) {
+    expect(
+      settingsSchema.safeParse({ ...DEFAULT_SETTINGS, model: 'gpt-6.1-sol', reasoningEffort })
+        .success,
+    ).toBe(true);
+  }
+  expect(
+    settingsSchema.safeParse({ ...DEFAULT_SETTINGS, model: 'gpt-6.1-sol', reasoningEffort: 'none' })
+      .success,
+  ).toBe(false);
+});
+
+it('omits a custom output cap and reports actual token and cache usage', async () => {
+  mocked.responses.mockResolvedValue(
+    (async function* () {
+      yield { type: 'response.output_text.delta', delta: 'Try a smaller example.' };
+      yield {
+        type: 'response.completed',
+        response: {
+          usage: {
+            input_tokens: 10500,
+            output_tokens: 130,
+            input_tokens_details: { cached_tokens: 10000, cache_write_tokens: 0 },
+            output_tokens_details: { reasoning_tokens: 100 },
+          },
+        },
+      };
+    })(),
+  );
+  const result = [];
+  for await (const event of new OpenAIProvider('not-a-real-key').answer(
+    {
+      model: 'gpt-6.1-sol',
+      reasoningEffort: 'low',
+      fastMode: false,
+      instructions: 'Help with the task',
+      referenceMaterial: 'Course notes',
+      modeInstructions: 'Manual mode',
+      input: '{}',
+      maxOutputTokens: null,
+    },
+    new AbortController().signal,
+  ))
+    result.push(event);
+  expect(mocked.responses.mock.lastCall?.[0]).not.toHaveProperty('max_output_tokens');
+  expect(result.at(-1)).toEqual({
+    type: 'done',
+    usage: {
+      inputTokens: 10500,
+      outputTokens: 130,
+      cachedInputTokens: 10000,
+      cacheWriteTokens: 0,
+      reasoningTokens: 100,
+    },
+  });
 });

@@ -20,6 +20,7 @@ import {
   Zap,
 } from 'lucide-react';
 import { DEFAULT_SETTINGS } from '../shared/defaults';
+import { MAX_CONTEXT_CHARACTERS, TASK_PRESETS } from '../shared/tasks';
 import type {
   Bootstrap,
   CaptureHandle,
@@ -27,6 +28,7 @@ import type {
   Source,
   Suggestion,
   TranscriptEntry,
+  RequestUsage,
 } from '../shared/types';
 import { startCapture } from './audio/capture';
 import { TranscriptReconciler } from './audio/reconcile';
@@ -41,19 +43,6 @@ function loadSettings(): Settings {
     return { ...DEFAULT_SETTINGS };
   }
 }
-const presets = {
-  universal: { name: 'General', prompt: DEFAULT_SETTINGS.systemPrompt },
-  sales: {
-    name: 'Sales',
-    prompt:
-      'You are helping me during a sales call. Suggest a short, useful answer to the latest question or objection. Ask an open question when needs are unclear. Do not invent prices, guarantees, references, or product capabilities. Use the language of the conversation. Use at most three short sentences.',
-  },
-  interview: {
-    name: 'Interview',
-    prompt:
-      'You are helping me during an interview. Help me clearly describe the experience provided in the conversation context. Do not invent qualifications or experiences. When facts are missing, suggest a follow-up question or an answer structure. Use the language of the conversation. Use at most three short sentences.',
-  },
-};
 const time = (value: number) =>
   new Date(value).toLocaleTimeString('en-GB', {
     hour: '2-digit',
@@ -67,6 +56,7 @@ export default function App() {
   const [view, setView] = useState<'session' | 'settings'>('session');
   const [entries, setEntries] = useState<TranscriptEntry[]>([]);
   const [suggestions, setSuggestions] = useState<Suggestion[]>([]);
+  const [requestUsage, setRequestUsage] = useState<RequestUsage[]>([]);
   const [listening, setListening] = useState(false);
   const [starting, setStarting] = useState(false);
   const [stopping, setStopping] = useState(false);
@@ -98,7 +88,7 @@ export default function App() {
   latest.current = { settings, entries, suggestions, bootstrap, demo, auto, listening };
   const busyRef = useRef(false);
   const activeMode = useRef<'manual' | 'auto' | null>(null);
-  const autoSeen = useRef('');
+  const autoSeen = useRef(new Set<string>());
   const lastAutoAt = useRef(0);
   const sessionEpoch = useRef(0);
   const transcriptEnd = useRef<HTMLDivElement>(null);
@@ -122,9 +112,7 @@ export default function App() {
       .then((status) => {
         shortcuts.current = Object.fromEntries(status.map((s) => [s.accelerator, s.registered]));
         if (status.some((s) => !s.registered))
-          setNotice(
-            'A global shortcut is already in use. Use the other shortcut or the answer button.',
-          );
+          setNotice('A global shortcut is already in use. Use the other shortcut or Run task.');
       })
       .catch(() => {});
     return () => {
@@ -167,7 +155,17 @@ export default function App() {
 
   const requestAnswer = useCallback(async (mode: 'manual' | 'auto', typed = '') => {
     const state = latest.current;
-    if (!state.bootstrap || (!state.entries.length && !typed.trim())) return;
+    if (
+      !state.bootstrap ||
+      (!state.entries.length && !typed.trim() && !state.settings.context.trim())
+    )
+      return;
+    if (state.settings.context.length > MAX_CONTEXT_CHARACTERS) {
+      setError(
+        `Reference material exceeds ${MAX_CONTEXT_CHARACTERS.toLocaleString('en-US')} characters. Shorten it in Settings before running the task.`,
+      );
+      return;
+    }
     if (busyRef.current) {
       if (mode === 'auto' || activeMode.current === 'manual') return;
       answerRef.current?.abort();
@@ -200,6 +198,18 @@ export default function App() {
       )) {
         if (epoch !== sessionEpoch.current) break;
         if (event.type === 'error') throw new Error(event.message);
+        if ((event.type === 'done' || event.type === 'skip') && event.usage) {
+          setRequestUsage((current) => [
+            ...current,
+            {
+              timestamp: Date.now(),
+              model: state.settings.model,
+              mode,
+              skipped: event.type === 'skip',
+              usage: event.usage!,
+            },
+          ]);
+        }
         if (event.type === 'skip') break;
         if (event.type === 'delta') {
           text += event.text;
@@ -226,7 +236,7 @@ export default function App() {
       setSuggestions((current) => current.map((s) => (s.id === id ? { ...s, status: 'done' } : s)));
     } catch (e) {
       if (!controller.signal.aborted && epoch === sessionEpoch.current) {
-        setError(e instanceof Error ? e.message : 'The answer failed. Try again.');
+        setError(e instanceof Error ? e.message : 'The task failed. Try again.');
         setSuggestions((current) =>
           current.map((s) => (s.id === id ? { ...s, status: 'error' } : s)),
         );
@@ -245,19 +255,44 @@ export default function App() {
     }
   }, []);
 
+  const automaticTurn = [...entries]
+    .reverse()
+    .find(
+      (entry) =>
+        entry.final &&
+        (settings.autoTriggerSource === 'either' || entry.source === settings.autoTriggerSource),
+    );
+  const automaticTurnKey = automaticTurn
+    ? `${automaticTurn.source}:${automaticTurn.turnId ?? automaticTurn.id}`
+    : '';
+  const contextTooLong = settings.context.length > MAX_CONTEXT_CHARACTERS;
   useEffect(() => {
-    if (!auto || !listening || busy) return;
-    const last = [...entries].reverse().find((entry) => entry.final && entry.source === 'system');
-    const turnId = last?.turnId ?? last?.id;
-    if (!last || turnId === autoSeen.current) return;
+    if (
+      !auto ||
+      !listening ||
+      busy ||
+      contextTooLong ||
+      !automaticTurnKey ||
+      autoSeen.current.has(automaticTurnKey)
+    )
+      return;
     const delay = Math.max(550, settings.autoCooldownMs - (Date.now() - lastAutoAt.current));
     autoTimer.current = setTimeout(() => {
-      autoSeen.current = turnId!;
+      autoSeen.current.add(automaticTurnKey);
       lastAutoAt.current = Date.now();
       void requestAnswer('auto');
     }, delay);
     return () => clearTimeout(autoTimer.current);
-  }, [auto, listening, busy, entries, settings.autoCooldownMs, requestAnswer]);
+  }, [
+    auto,
+    listening,
+    busy,
+    contextTooLong,
+    automaticTurnKey,
+    settings.autoCooldownMs,
+    settings.autoTriggerSource,
+    requestAnswer,
+  ]);
 
   useEffect(() => {
     if (!auto && activeMode.current === 'auto') answerRef.current?.abort();
@@ -315,9 +350,10 @@ export default function App() {
     reconciler.current.clear();
     echoNotified.current = false;
     setSuggestions([]);
+    setRequestUsage([]);
     setElapsed(0);
     setQuestion('');
-    autoSeen.current = '';
+    autoSeen.current.clear();
     lastAutoAt.current = 0;
     followTranscript.current = true;
     setError('');
@@ -488,6 +524,7 @@ export default function App() {
                 status: attributionStatus,
               },
               suggestions,
+              requestUsage,
             },
             null,
             2,
@@ -510,7 +547,7 @@ export default function App() {
       setCopied(suggestion.id);
       setTimeout(() => setCopied(''), 1800);
     } catch {
-      setError('Copying was blocked. Select the answer text and copy it with your keyboard.');
+      setError('Copying was blocked. Select the result text and copy it with your keyboard.');
     }
   }
   const current = suggestions.at(-1);
@@ -753,10 +790,16 @@ export default function App() {
                     <ChevronDown size={13} />
                   </summary>
                   <div>
-                    <button disabled={!entries.length} onClick={() => download('md')}>
+                    <button
+                      disabled={!entries.length && !suggestions.length}
+                      onClick={() => download('md')}
+                    >
                       Transcript as Markdown
                     </button>
-                    <button disabled={!entries.length} onClick={() => download('json')}>
+                    <button
+                      disabled={!entries.length && !suggestions.length && !requestUsage.length}
+                      onClick={() => download('json')}
+                    >
                       Session as JSON
                     </button>
                   </div>
@@ -793,8 +836,8 @@ export default function App() {
                         {current.mode === 'auto'
                           ? 'Automatic hint'
                           : current.question
-                            ? 'Your question'
-                            : 'Answer suggestion'}
+                            ? 'Command'
+                            : 'Result'}
                       </span>
                       <time>{time(current.timestamp)}</time>
                     </div>
@@ -810,12 +853,12 @@ export default function App() {
                         {current.status === 'streaming'
                           ? 'Drafting …'
                           : current.status === 'error'
-                            ? 'Incomplete answer'
-                            : 'A suggestion to put in your own words.'}
+                            ? 'Incomplete result'
+                            : 'Based on your task and available context.'}
                       </span>
                       <button
                         className="icon-button"
-                        aria-label="Copy answer"
+                        aria-label="Copy result"
                         onClick={() => void copy(current)}
                       >
                         {copied === current.id ? <Check size={17} /> : <Copy size={17} />}
@@ -826,11 +869,14 @@ export default function App() {
                   <div className="empty-answer">
                     <span className="answer-mark">“</span>
                     <h3>
-                      The right words.
+                      Useful help.
                       <br />
                       When you need them.
                     </h3>
-                    <p>Press a key to get a short answer suggestion based on the conversation.</p>
+                    <p>
+                      Press F8 to run your task using the reference material and recent
+                      conversation.
+                    </p>
                     <div className="shortcut-demo">
                       <kbd>F8</kbd>
                       <span>or use the button below</span>
@@ -842,13 +888,13 @@ export default function App() {
                     <span className="status-dot live" />
                     {activeMode.current === 'auto'
                       ? 'Checking whether a hint would help …'
-                      : 'Drafting an answer …'}
+                      : 'Working on your task …'}
                   </p>
                 )}
               </div>
               {suggestions.length > 1 && (
                 <details className="history">
-                  <summary>{suggestions.length - 1} previous suggestions</summary>
+                  <summary>{suggestions.length - 1} previous results</summary>
                   <div>
                     {suggestions
                       .slice(0, -1)
@@ -865,11 +911,16 @@ export default function App() {
               <div className="answer-controls">
                 <button
                   className="answer-button"
-                  disabled={!bootstrap || busy || !entries.some((e) => e.text.trim())}
+                  disabled={
+                    !bootstrap ||
+                    busy ||
+                    contextTooLong ||
+                    (!entries.some((e) => e.text.trim()) && !settings.context.trim())
+                  }
                   onClick={() => void requestAnswer('manual')}
                 >
                   <Zap size={18} />
-                  {busy ? 'Thinking …' : 'Suggest answer'}
+                  {busy ? 'Thinking …' : 'Run task'}
                   <kbd>F8</kbd>
                 </button>
                 <form
@@ -882,16 +933,16 @@ export default function App() {
                   }}
                 >
                   <input
-                    aria-label="Your question"
+                    aria-label="Command"
                     value={question}
                     onChange={(e) => setQuestion(e.target.value)}
-                    placeholder="Or ask your own question …"
+                    placeholder="Enter a command …"
                     maxLength={4000}
                   />
                   <button
                     type="submit"
-                    aria-label="Send question"
-                    disabled={!question.trim() || busy || !bootstrap}
+                    aria-label="Run command"
+                    disabled={!question.trim() || busy || !bootstrap || contextTooLong}
                   >
                     <ArrowRight size={18} />
                   </button>
@@ -1016,7 +1067,7 @@ export default function App() {
             <section className="settings-section">
               <h2>Model & language</h2>
               <label>
-                Answer model
+                Task model
                 <select
                   value={settings.model}
                   onChange={(e) =>
@@ -1028,7 +1079,7 @@ export default function App() {
                   {ANSWER_MODELS.map((model) => (
                     <option key={model} value={model}>
                       {model
-                        .replace('gpt-6-', 'GPT-6 ')
+                        .replace(/^gpt-(6(?:\.1)?)-/, 'GPT-$1 ')
                         .replace(
                           /\b(luna|sol|astra)\b/g,
                           (name) => name[0].toUpperCase() + name.slice(1),
@@ -1073,7 +1124,7 @@ export default function App() {
               <p className="field-help">
                 Fast requests priority processing at 2× standard token rates, where available.
                 Higher reasoning can increase response time and token use. The token budget includes
-                reasoning and the visible answer.
+                reasoning and the visible result.
               </p>
               <div className="field-row">
                 <label>
@@ -1091,7 +1142,21 @@ export default function App() {
                   </select>
                 </label>
                 <label>
-                  Reasoning and answer token budget
+                  Output token limit
+                  <select
+                    value={settings.maxOutputTokens === null ? 'model' : 'custom'}
+                    onChange={(e) =>
+                      update('maxOutputTokens', e.target.value === 'model' ? null : 4096)
+                    }
+                  >
+                    <option value="model">Model default</option>
+                    <option value="custom">Custom limit</option>
+                  </select>
+                </label>
+              </div>
+              {settings.maxOutputTokens !== null && (
+                <label>
+                  Maximum output tokens
                   <input
                     type="number"
                     min={64}
@@ -1100,7 +1165,12 @@ export default function App() {
                     onChange={(e) => update('maxOutputTokens', Number(e.target.value))}
                   />
                 </label>
-              </div>
+              )}
+              <p className="field-help">
+                The limit includes internal reasoning and the visible result. Model default leaves
+                the token limit to the model. Task instructions control length; requests still have
+                a time limit.
+              </p>
             </section>
             <section className="settings-section audio-settings">
               <h2>Audio sources</h2>
@@ -1290,40 +1360,79 @@ export default function App() {
             <section className="settings-section prompt-settings">
               <h2>How your assistant should help</h2>
               <div className="preset-buttons">
-                {Object.entries(presets).map(([id, preset]) => (
+                {Object.entries(TASK_PRESETS).map(([id, preset]) => (
                   <button
                     key={id}
                     className={settings.systemPrompt === preset.prompt ? 'preset active' : 'preset'}
-                    onClick={() => update('systemPrompt', preset.prompt)}
+                    onClick={() =>
+                      setSettings((current) => ({
+                        ...current,
+                        systemPrompt: preset.prompt,
+                        autoPrompt: preset.autoPrompt,
+                        autoTriggerSource: preset.autoTriggerSource,
+                      }))
+                    }
                   >
                     {preset.name}
                   </button>
                 ))}
               </div>
+              <p className="field-help">
+                Presets set the task, automatic rule, and trigger source. Your reference material
+                stays in place.
+              </p>
               <label>
-                System prompt
+                Task instructions
                 <textarea
                   rows={5}
                   value={settings.systemPrompt}
+                  aria-label="Task instructions"
                   maxLength={12000}
                   onChange={(e) => update('systemPrompt', e.target.value)}
                 />
               </label>
               <label>
-                Conversation context
+                Reference material
                 <textarea
                   rows={4}
                   value={settings.context}
-                  maxLength={16000}
-                  placeholder="What is the call about? Add the offer, goals, background, and facts the model should know."
+                  aria-label="Reference material"
+                  aria-describedby="reference-help"
+                  aria-invalid={contextTooLong}
+                  placeholder="Paste course notes, documentation, or facts. Include section and exercise identifiers."
                   onChange={(e) => update('context', e.target.value)}
                 />
+              </label>
+              <p
+                id="reference-help"
+                className="field-help"
+                role={contextTooLong ? 'alert' : undefined}
+              >
+                {settings.context.length.toLocaleString('en-US')} /{' '}
+                {MAX_CONTEXT_CHARACTERS.toLocaleString('en-US')} characters.
+                {contextTooLong
+                  ? ' Shorten the material before running a task. Your pasted text has been kept in full.'
+                  : ' Included in full with each request, alongside recent conversation. Saved on this device with Save template.'}
+              </p>
+              <label>
+                Automatic trigger source
+                <select
+                  value={settings.autoTriggerSource}
+                  onChange={(e) =>
+                    update('autoTriggerSource', e.target.value as Settings['autoTriggerSource'])
+                  }
+                >
+                  <option value="system">Other speakers (call audio)</option>
+                  <option value="mic">Me (microphone)</option>
+                  <option value="either">Either</option>
+                </select>
               </label>
               <label>
                 Automatic mode prompt
                 <textarea
                   rows={4}
                   value={settings.autoPrompt}
+                  aria-label="Automatic mode prompt"
                   maxLength={12000}
                   onChange={(e) => update('autoPrompt', e.target.value)}
                 />
@@ -1339,8 +1448,9 @@ export default function App() {
                 />
               </label>
               <p className="field-help">
-                After new call audio turns, the model uses this prompt to decide whether a
-                suggestion would help. Checks that produce no hint also consume API tokens.
+                After finalized transcript segments from the selected source, the model checks this
+                rule. Checks that produce no result also consume API tokens. F8 runs the task
+                immediately using available text.
               </p>
             </section>
           </div>
