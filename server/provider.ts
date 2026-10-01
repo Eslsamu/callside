@@ -41,7 +41,7 @@ The transcript is recent conversation, not necessarily the entire session. Use t
 
 const MANUAL_INSTRUCTIONS = `MANUAL MODE. The user requested assistance now.
 If userCommand is present, carry it out using the configured task and available context. Otherwise perform the configured task for the current situation. A question or completed speaking turn is not required.
-Return the useful result without an introductory acknowledgment. If there is not enough context to identify a useful task, ask one focused clarification.`;
+Infer the immediate need from the available conversation when no command is present. Return the useful result without an introductory acknowledgment. Do not ask the user to type a command or choose a category. If essential information is missing, provide a useful grounded result and identify the gap. For live speaking tasks, phrase any necessary clarification as something the user can ask the other participants aloud.`;
 const AUTO_INSTRUCTIONS = `AUTOMATIC MODE. Evaluate the configured automatic-trigger rule against the current conversation.
 If the rule is satisfied and there is useful new assistance to provide, perform the configured task. Otherwise output exactly ${WAIT_SENTINEL}.
 Avoid repeating previous assistance unless new information changes it or the configured task requires repetition.`;

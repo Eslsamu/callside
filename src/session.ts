@@ -1,5 +1,12 @@
 import { ANSWER_MODELS, reasoningOptions } from '../shared/models';
-import { LEGACY_TASK_PROMPT, LEGACY_AUTO_PROMPT } from '../shared/tasks';
+import {
+  LEGACY_TASK_PROMPT,
+  LEGACY_AUTO_PROMPT,
+  LEGACY_GENERAL_TASK_V030,
+  LEGACY_WORKSHOP_TASK_V030,
+  LEGACY_WORKSHOP_AUTO_V030,
+  TASK_PRESETS,
+} from '../shared/tasks';
 import type { Settings, Suggestion, TranscriptEntry } from '../shared/types';
 export const DEMO_TURNS = [
   {
@@ -57,7 +64,15 @@ export function safeSettings(stored: unknown, defaults: Settings): Settings {
     result.maxOutputTokens = Math.max(64, Math.min(32768, Math.floor(budget)));
   if (!['system', 'mic', 'either'].includes(result.autoTriggerSource))
     result.autoTriggerSource = defaults.autoTriggerSource;
-  if (result.systemPrompt === LEGACY_TASK_PROMPT) result.systemPrompt = defaults.systemPrompt;
+  if (
+    result.systemPrompt === LEGACY_TASK_PROMPT ||
+    result.systemPrompt === LEGACY_GENERAL_TASK_V030
+  )
+    result.systemPrompt = defaults.systemPrompt;
+  if (result.systemPrompt === LEGACY_WORKSHOP_TASK_V030)
+    result.systemPrompt = TASK_PRESETS.workshop.prompt;
+  if (result.autoPrompt === LEGACY_WORKSHOP_AUTO_V030)
+    result.autoPrompt = TASK_PRESETS.workshop.autoPrompt;
   if (result.autoPrompt === LEGACY_AUTO_PROMPT) result.autoPrompt = defaults.autoPrompt;
   result.autoCooldownMs = Math.max(3000, Math.min(60000, result.autoCooldownMs));
   result.diarizationChunkSeconds = Math.max(4, Math.min(30, result.diarizationChunkSeconds));

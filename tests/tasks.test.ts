@@ -4,6 +4,9 @@ import { settingsSchema } from '../server/validation';
 import { DEFAULT_SETTINGS } from '../shared/defaults';
 import {
   LEGACY_AUTO_PROMPT,
+  LEGACY_GENERAL_TASK_V030,
+  LEGACY_WORKSHOP_TASK_V030,
+  LEGACY_WORKSHOP_AUTO_V030,
   LEGACY_TASK_PROMPT,
   MAX_CONTEXT_CHARACTERS,
   TASK_PRESETS,
@@ -88,4 +91,31 @@ describe('configurable tasks and reference material', () => {
       safeSettings({ maxOutputTokens: NaN, autoTriggerSource: 'invalid' }, DEFAULT_SETTINGS),
     ).toMatchObject({ maxOutputTokens: null, autoTriggerSource: 'system' });
   });
+});
+
+it('upgrades the saved Workshop preset without changing references, settings, or edited prompts', () => {
+  const saved = {
+    ...DEFAULT_SETTINGS,
+    systemPrompt: LEGACY_WORKSHOP_TASK_V030,
+    autoPrompt: LEGACY_WORKSHOP_AUTO_V030,
+    context: 'My course notes',
+    autoTriggerSource: 'either' as const,
+    maxOutputTokens: 2048,
+  };
+  expect(safeSettings(saved, DEFAULT_SETTINGS)).toMatchObject({
+    systemPrompt: TASK_PRESETS.workshop.prompt,
+    autoPrompt: TASK_PRESETS.workshop.autoPrompt,
+    context: 'My course notes',
+    autoTriggerSource: 'either',
+    maxOutputTokens: 2048,
+  });
+  const custom = {
+    ...saved,
+    systemPrompt: saved.systemPrompt + '\nMy extra instructions.',
+    autoPrompt: 'My own trigger rule.',
+  };
+  expect(safeSettings(custom, DEFAULT_SETTINGS)).toMatchObject(custom);
+  expect(
+    safeSettings({ systemPrompt: LEGACY_GENERAL_TASK_V030 }, DEFAULT_SETTINGS).systemPrompt,
+  ).toBe(DEFAULT_SETTINGS.systemPrompt);
 });

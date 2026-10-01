@@ -773,6 +773,15 @@ nav {
 .answer-button svg {
   margin-right: auto;
 }
+.command-options {
+  margin-top: 12px;
+}
+.command-options summary {
+  color: var(--muted);
+  cursor: pointer;
+  font-size: 12px;
+  padding: 5px 0;
+}
 .answer-controls form {
   display: flex;
   margin-top: 13px;

@@ -112,7 +112,7 @@ export default function App() {
       .then((status) => {
         shortcuts.current = Object.fromEntries(status.map((s) => [s.accelerator, s.registered]));
         if (status.some((s) => !s.registered))
-          setNotice('A global shortcut is already in use. Use the other shortcut or Run task.');
+          setNotice('A global shortcut is already in use. Use the other shortcut or Help now.');
       })
       .catch(() => {});
     return () => {
@@ -871,11 +871,11 @@ export default function App() {
                     <h3>
                       Useful help.
                       <br />
-                      When you need them.
+                      When you need it.
                     </h3>
                     <p>
-                      Press F8 to run your task using the reference material and recent
-                      conversation.
+                      Press F8 for help with what is happening now, based on your task and reference
+                      material.
                     </p>
                     <div className="shortcut-demo">
                       <kbd>F8</kbd>
@@ -920,33 +920,36 @@ export default function App() {
                   onClick={() => void requestAnswer('manual')}
                 >
                   <Zap size={18} />
-                  {busy ? 'Thinking …' : 'Run task'}
+                  {busy ? 'Thinking …' : 'Help now'}
                   <kbd>F8</kbd>
                 </button>
-                <form
-                  onSubmit={(e) => {
-                    e.preventDefault();
-                    if (question.trim()) {
-                      void requestAnswer('manual', question);
-                      setQuestion('');
-                    }
-                  }}
-                >
-                  <input
-                    aria-label="Command"
-                    value={question}
-                    onChange={(e) => setQuestion(e.target.value)}
-                    placeholder="Enter a command …"
-                    maxLength={4000}
-                  />
-                  <button
-                    type="submit"
-                    aria-label="Run command"
-                    disabled={!question.trim() || busy || !bootstrap || contextTooLong}
+                <details className="command-options">
+                  <summary>Specific command (optional)</summary>
+                  <form
+                    onSubmit={(e) => {
+                      e.preventDefault();
+                      if (question.trim()) {
+                        void requestAnswer('manual', question);
+                        setQuestion('');
+                      }
+                    }}
                   >
-                    <ArrowRight size={18} />
-                  </button>
-                </form>
+                    <input
+                      aria-label="Command"
+                      value={question}
+                      onChange={(e) => setQuestion(e.target.value)}
+                      placeholder="Enter a command …"
+                      maxLength={4000}
+                    />
+                    <button
+                      type="submit"
+                      aria-label="Run command"
+                      disabled={!question.trim() || busy || !bootstrap || contextTooLong}
+                    >
+                      <ArrowRight size={18} />
+                    </button>
+                  </form>
+                </details>
                 <span className="shortcut-hint">
                   <Keyboard size={13} />
                   {window.callsideDesktop

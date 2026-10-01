@@ -363,6 +363,8 @@ test('demo produces a transcript and answers typed questions and F8 without a ke
 }) => {
   await startDemo(page);
   const question = 'What specific follow-up question should I ask now?';
+  await expect(page.getByLabel('Command', { exact: true })).not.toBeVisible();
+  await page.getByText('Specific command (optional)', { exact: true }).click();
   await page.getByLabel('Command', { exact: true }).fill(question);
   const manualRequest = page.waitForRequest(
     (request) => request.url().endsWith('/api/answer') && request.method() === 'POST',
@@ -372,14 +374,14 @@ test('demo produces a transcript and answers typed questions and F8 without a ke
   expect(payload).toMatchObject({ question, mode: 'manual', demo: true });
   expect(payload.transcript.length).toBeGreaterThan(1);
   await expect(page.getByTestId('suggestion').first()).toBeVisible();
-  await expect(page.getByRole('button', { name: /^Run task/ })).toBeEnabled();
+  await expect(page.getByRole('button', { name: /^Help now/ })).toBeEnabled();
 
   const keyboardRequest = page.waitForRequest(
     (request) => request.url().endsWith('/api/answer') && request.method() === 'POST',
   );
   await page.keyboard.press('F8');
   expect((await keyboardRequest).postDataJSON()).toMatchObject({ mode: 'manual', demo: true });
-  await expect(page.getByText('1 previous suggestions', { exact: true })).toBeVisible();
+  await expect(page.getByText('1 previous results', { exact: true })).toBeVisible();
 });
 
 test('automatic mode requests a contextual demo suggestion', async ({ page }) => {
@@ -411,7 +413,7 @@ test('edited prompts are used in answers and saved only when requested', async (
   const answerRequest = page.waitForRequest(
     (request) => request.url().endsWith('/api/answer') && request.method() === 'POST',
   );
-  await page.getByRole('button', { name: /^Run task/ }).click();
+  await page.getByRole('button', { name: /^Help now/ }).click();
   expect((await answerRequest).postDataJSON().settings).toMatchObject({
     systemPrompt: 'Answer briefly and ask a follow-up question when facts are missing.',
     context: 'We are planning a two-week test with exactly three participants.',
@@ -625,7 +627,7 @@ test('GPT-6 controls restrict models, normalize Astra reasoning, and persist API
   const request = page.waitForRequest(
     (r) => r.url().endsWith('/api/answer') && r.method() === 'POST',
   );
-  await page.getByRole('button', { name: /^Run task/ }).click();
+  await page.getByRole('button', { name: /^Help now/ }).click();
   expect((await request).postDataJSON().settings).toMatchObject({
     model: 'gpt-6.1-sol',
     reasoningEffort: 'high',
@@ -663,11 +665,13 @@ test('Workshop preserves long references, runs before speech, and exports cache 
     .selectOption('model');
   await page.getByRole('button', { name: 'Save template', exact: true }).click();
   await page.reload();
-  await expect(page.getByRole('button', { name: /^Run task/ })).toBeEnabled();
+  await expect(page.getByRole('button', { name: /^Help now/ })).toBeEnabled();
   const sent = page.waitForRequest((r) => r.url().endsWith('/api/answer') && r.method() === 'POST');
+  await expect(page.getByLabel('Command', { exact: true })).not.toBeVisible();
   await page.keyboard.press('F8');
   expect((await sent).postDataJSON()).toMatchObject({
     transcript: [],
+    question: '',
     mode: 'manual',
     settings: {
       context: reference,
@@ -701,7 +705,7 @@ test('oversized pasted references are retained and block task requests with a cl
   await expect(page.getByLabel('Reference material', { exact: true })).toHaveValue(reference);
   await expect(page.getByRole('alert')).toContainText('Your pasted text has been kept in full');
   await page.getByRole('button', { name: 'Conversation', exact: true }).click();
-  await expect(page.getByRole('button', { name: /^Run task/ })).toBeDisabled();
+  await expect(page.getByRole('button', { name: /^Help now/ })).toBeDisabled();
   await page.keyboard.press('F8');
   await expect(page.getByRole('alert')).toContainText(
     'Reference material exceeds 100,000 characters',

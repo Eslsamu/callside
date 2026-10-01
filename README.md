@@ -54,7 +54,7 @@ npm start
    In the desktop app, leave **Remember API key on this device** checked and click **Save API key** to reuse it after restarting. **Remove API key** clears the saved key and the current session key. Browser users can set `OPENAI_API_KEY` in a local `.env` file.
 3. Choose your model, prompts, context, microphone, and call audio.
 4. Let everyone know about transcription, then start the call and grant audio permissions.
-5. Press **F8**, click **Run task**, or enter a command. Enable **Automatic hints** for prompt-controlled assistance.
+5. Press **F8**, click **Help now**, or enter a command. Enable **Automatic hints** for prompt-controlled assistance.
 6. End the call and export the session as JSON or Markdown if needed.
 
 ## ChatGPT subscription or API key?
@@ -95,9 +95,9 @@ Reference material supports up to **100,000 characters**. The UI shows the count
 2. Paste the course notes into **Reference material**. Include section names, exercise identifiers, and official solutions where available.
 3. Choose **GPT-6.1 Sol**, **Low** reasoning, and **Model default** under **Output token limit**. Fast mode is optional and costs more.
 4. Click **Save template**, return to **Conversation**, and leave **Automatic hints** off for the first test.
-5. Press **F8**, **Command/Ctrl+Shift+Space**, or **Run task**. Enter a **Command** for a specific request such as “Explain exercise 7” or “Draft notes on the decision.”
+5. Press **F8**, **Command/Ctrl+Shift+Space**, or **Help now** whenever you need help. The model infers the current topic and need from the conversation; typing is optional and hidden under **Specific command (optional)**.
 
-Manual triggering can use partial transcript text and works with reference material before anyone has spoken. Workshop instructions favor exercise hints unless you request a solution or the discussion calls for one. They ask for source identifiers where supplied and distinguish official solutions from the model's own examples.
+Manual triggering can use partial transcript text and works with reference material before anyone has spoken. Workshop instructions choose a response, explanation, example, exercise step, correction, or transition from the ongoing discussion. They lead with a short passage the facilitator can say aloud and keep any source reference separate. If clarification is essential, they suggest a question to ask participants aloud. Exact saved v0.3.0 Workshop and General defaults upgrade automatically; edited prompts remain untouched.
 
 For automatic assistance, select **Automatic trigger source**: **Other speakers (call audio)**, **Me (microphone)**, or **Either**. Workshop selects Either. The app checks the **Automatic mode prompt** after finalized segments from the selected audio source, with a cooldown and duplicate-turn suppression. These source choices describe audio channels; microphone bleed can still affect attribution. Checks that produce no result also consume API tokens. Automatic hints can miss opportunities or intervene at the wrong moment.
 

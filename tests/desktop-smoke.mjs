@@ -60,6 +60,7 @@ try {
       .screenshot({ path: process.env.CALLSIDE_SMOKE_SCREENSHOT });
   }
   await page.getByRole('button', { name: 'Conversation', exact: true }).click();
+  await expect(page.getByLabel('Command', { exact: true })).not.toBeVisible();
   expect(await page.evaluate(() => typeof window.callsideDesktop?.onAnswer)).toBe('function');
   expect(await page.evaluate(() => window.callsideDesktop.getShortcutStatus())).toEqual([
     { accelerator: 'F8', registered: false },
@@ -72,7 +73,12 @@ try {
     BrowserWindow.getAllWindows()[0].webContents.send('callside:answer'),
   );
   await expect(page.getByTestId('suggestion')).toContainText('Demo suggestion');
-  await expect(page.getByRole('button', { name: /^Run task/ })).toBeEnabled();
+  await expect(page.getByRole('button', { name: /^Help now/ })).toBeEnabled();
+  if (process.env.CALLSIDE_SMOKE_CONTROLS_SCREENSHOT) {
+    await page
+      .locator('.answer-controls')
+      .screenshot({ path: process.env.CALLSIDE_SMOKE_CONTROLS_SCREENSHOT });
+  }
   await page.evaluate(() => window.callsideDesktop.setAlwaysOnTop(true));
   expect(
     await app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0].isAlwaysOnTop()),
