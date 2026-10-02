@@ -23,6 +23,7 @@ import { DEFAULT_SETTINGS } from '../shared/defaults';
 import { MAX_CONTEXT_CHARACTERS, TASK_PRESETS } from '../shared/tasks';
 import type {
   Bootstrap,
+  ChatGPTStatus,
   CaptureHandle,
   Settings,
   Source,
@@ -72,6 +73,8 @@ export default function App({
   const [notice, setNotice] = useState('');
   const [apiKey, setApiKey] = useState('');
   const [keyBusy, setKeyBusy] = useState(false);
+  const [chatgptBusy, setChatgptBusy] = useState(false);
+  const [chatgptError, setChatgptError] = useState('');
   const [rememberKey, setRememberKey] = useState(true);
   const [pin, setPin] = useState(false);
   const [elapsed, setElapsed] = useState(0);
@@ -127,6 +130,70 @@ export default function App({
       abort.abort();
     };
   }, []);
+  const chatgptAction = useCallback(async (action: string, accountId?: string) => {
+    const token = latest.current.bootstrap?.token;
+    if (!token) return;
+    setChatgptBusy(true);
+    setChatgptError('');
+    try {
+      const response = await fetch(`/api/chatgpt/${action}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'x-callside-token': token },
+        body: JSON.stringify({ accountId }),
+      });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || 'ChatGPT connection failed.');
+      setBootstrap((current) => (current ? { ...current, chatgpt: data } : current));
+      if (action === 'connect')
+        setSettings((current) => ({ ...current, answerBilling: 'chatgpt' }));
+      if (action === 'models' && data.models.length)
+        setSettings((current) =>
+          safeSettings(
+            {
+              ...current,
+              model: data.models.some((m: { id: string }) => m.id === current.model)
+                ? current.model
+                : data.models[0].id,
+            },
+            DEFAULT_SETTINGS,
+          ),
+        );
+    } catch (error) {
+      setChatgptError(error instanceof Error ? error.message : 'ChatGPT connection failed.');
+    } finally {
+      setChatgptBusy(false);
+    }
+  }, []);
+  useEffect(() => {
+    if (!bootstrap?.chatgpt?.pending) return;
+    const abort = new AbortController();
+    const interval = setInterval(() => {
+      fetch('/api/chatgpt', {
+        headers: { 'x-callside-token': bootstrap.token },
+        signal: abort.signal,
+      })
+        .then((r) => {
+          if (!r.ok) throw new Error();
+          return r.json();
+        })
+        .then((chatgpt: ChatGPTStatus) =>
+          setBootstrap((current) => (current ? { ...current, chatgpt } : current)),
+        )
+        .catch(() => {});
+    }, 1000);
+    return () => {
+      clearInterval(interval);
+      abort.abort();
+    };
+  }, [bootstrap?.chatgpt?.pending, bootstrap?.token]);
+  useEffect(() => {
+    if (bootstrap?.chatgpt?.connected && !bootstrap.chatgpt.pending) void chatgptAction('models');
+  }, [
+    bootstrap?.chatgpt?.connected,
+    bootstrap?.chatgpt?.activeId,
+    bootstrap?.chatgpt?.pending,
+    chatgptAction,
+  ]);
   useEffect(
     () => () => {
       sessionEpoch.current++;
@@ -212,6 +279,7 @@ export default function App({
             {
               timestamp: Date.now(),
               model: state.settings.model,
+              billing: state.settings.answerBilling,
               mode,
               skipped: event.type === 'skip',
               usage: event.usage!,
@@ -670,6 +738,17 @@ export default function App({
         </div>
       )}
 
+      {bootstrap?.chatgpt?.welcomePending && (
+        <section className="message notice" role="dialog" aria-label="ChatGPT plan connected">
+          <span>
+            You're using your ChatGPT plan for eligible suggestions. Audio still uses API credit.
+            Manage plan limits in ChatGPT Settings.
+          </span>
+          <button disabled={chatgptBusy} onClick={() => void chatgptAction('welcome')}>
+            Got it
+          </button>
+        </section>
+      )}
       {view === 'session' ? (
         <main className="session-view">
           <section className="session-top" aria-label="Recording controls">
@@ -855,7 +934,14 @@ export default function App({
             <section className="assistant-pane" aria-labelledby="assistant-title">
               <div className="pane-header">
                 <h2 id="assistant-title">Results</h2>
-                <span className="model-label">{settings.model}</span>
+                <span className="model-label">
+                  {settings.model} ·{' '}
+                  {demo
+                    ? 'Demo'
+                    : settings.answerBilling === 'chatgpt'
+                      ? 'Using ChatGPT plan'
+                      : 'API credit'}
+                </span>
               </div>
               <label className="auto-control">
                 <span>
@@ -1102,6 +1188,117 @@ export default function App({
               </p>
             </section>
             <section className="settings-section">
+              <h2>Suggestion connection</h2>
+              {bootstrap?.chatgpt?.available && (
+                <button
+                  className="text-button"
+                  disabled={chatgptBusy}
+                  onClick={() => void chatgptAction('usage')}
+                >
+                  Manage ChatGPT usage
+                </button>
+              )}
+              <label>
+                Pay for suggestions with
+                <select
+                  value={settings.answerBilling}
+                  disabled={busy}
+                  onChange={(e) =>
+                    update('answerBilling', e.target.value as Settings['answerBilling'])
+                  }
+                >
+                  <option value="api">OpenAI API credit</option>
+                  <option value="chatgpt">ChatGPT subscription</option>
+                </select>
+              </label>
+              <p>
+                ChatGPT suggestions use your plan limits. Live transcription and speaker attribution
+                still use API credit. Subscription requests never fall back to API billing.
+              </p>
+              {!bootstrap?.chatgpt?.available ? (
+                <p className="field-help">Open the desktop app to connect ChatGPT.</p>
+              ) : (
+                <>
+                  <p className="key-state">
+                    {bootstrap.chatgpt.connected ? 'ChatGPT connected' : 'ChatGPT not connected'}
+                  </p>
+                  {bootstrap.chatgpt.accounts.length > 0 && (
+                    <label>
+                      ChatGPT account
+                      <select
+                        value={bootstrap.chatgpt.activeId ?? ''}
+                        disabled={chatgptBusy || bootstrap.chatgpt.pending || busy}
+                        onChange={(e) => void chatgptAction('select', e.target.value)}
+                      >
+                        {bootstrap.chatgpt.accounts.map((account) => (
+                          <option key={account.id} value={account.id}>
+                            {account.label}
+                            {account.connected ? '' : ' (signed out)'}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                  )}
+                  {bootstrap.chatgpt.pending ? (
+                    <>
+                      <p>Complete sign-in in your browser, then return here.</p>
+                      <button
+                        className="secondary-button"
+                        disabled={chatgptBusy}
+                        onClick={() => void chatgptAction('cancel')}
+                      >
+                        Cancel sign-in
+                      </button>
+                    </>
+                  ) : (
+                    <>
+                      <button
+                        className="secondary-button"
+                        disabled={chatgptBusy || busy}
+                        onClick={() => void chatgptAction('connect', bootstrap.chatgpt?.activeId)}
+                      >
+                        Continue with ChatGPT
+                      </button>
+                      {bootstrap.chatgpt.accounts.length > 0 && (
+                        <button
+                          className="text-button"
+                          disabled={chatgptBusy || busy}
+                          onClick={() => void chatgptAction('connect')}
+                        >
+                          Add another account
+                        </button>
+                      )}
+                      {bootstrap.chatgpt.connected && (
+                        <>
+                          <button
+                            className="text-button"
+                            disabled={chatgptBusy}
+                            onClick={() => void chatgptAction('models')}
+                          >
+                            Refresh available models
+                          </button>
+                          <button
+                            className="text-button"
+                            disabled={chatgptBusy}
+                            onClick={() => void chatgptAction('disconnect')}
+                          >
+                            Sign out of ChatGPT
+                          </button>
+                        </>
+                      )}
+                    </>
+                  )}
+                  <p className="field-help">
+                    Credentials are encrypted on this device and excluded from templates and
+                    exports. Manage limits and connected apps in ChatGPT Settings.
+                  </p>
+                </>
+              )}
+              {(chatgptError || bootstrap?.chatgpt?.error) && (
+                <p role="alert">{chatgptError || bootstrap?.chatgpt?.error}</p>
+              )}
+            </section>
+            <section className="settings-section">
               <h2>Model & language</h2>
               <label>
                 Task model
@@ -1113,14 +1310,23 @@ export default function App({
                     )
                   }
                 >
-                  {ANSWER_MODELS.map((model) => (
+                  {settings.answerBilling === 'chatgpt' &&
+                    !bootstrap?.chatgpt?.models.some((m) => m.id === settings.model) && (
+                      <option value={settings.model}>Connect ChatGPT / refresh models</option>
+                    )}
+                  {(settings.answerBilling === 'chatgpt'
+                    ? (bootstrap?.chatgpt?.models.map((m) => m.id) ?? [])
+                    : ANSWER_MODELS
+                  ).map((model) => (
                     <option key={model} value={model}>
-                      {model
-                        .replace(/^gpt-(6(?:\.1)?)-/, 'GPT-$1 ')
-                        .replace(
-                          /\b(luna|sol|astra)\b/g,
-                          (name) => name[0].toUpperCase() + name.slice(1),
-                        )}
+                      {settings.answerBilling === 'chatgpt'
+                        ? bootstrap?.chatgpt?.models.find((m) => m.id === model)?.name
+                        : model
+                            .replace(/^gpt-(6(?:\.1)?)-/, 'GPT-$1 ')
+                            .replace(
+                              /\b(luna|sol|astra)\b/g,
+                              (name) => name[0].toUpperCase() + name.slice(1),
+                            )}
                     </option>
                   ))}
                 </select>
@@ -1153,13 +1359,16 @@ export default function App({
               <label className="checkbox-label">
                 <input
                   type="checkbox"
-                  checked={settings.fastMode}
+                  checked={settings.answerBilling === 'api' && settings.fastMode}
+                  disabled={settings.answerBilling === 'chatgpt'}
                   onChange={(e) => update('fastMode', e.target.checked)}
                 />
                 Fast mode
               </label>
               <p className="field-help">
-                Fast requests priority processing at 2× standard token rates, where available.
+                {settings.answerBilling === 'chatgpt'
+                  ? 'Fast mode and custom output caps are unavailable through this subscription connection.'
+                  : 'Fast requests priority processing at 2× standard token rates, where available.'}{' '}
                 Higher reasoning can increase response time and token use. The token budget includes
                 reasoning and the visible result.
               </p>
@@ -1181,7 +1390,12 @@ export default function App({
                 <label>
                   Output token limit
                   <select
-                    value={settings.maxOutputTokens === null ? 'model' : 'custom'}
+                    disabled={settings.answerBilling === 'chatgpt'}
+                    value={
+                      settings.answerBilling === 'chatgpt' || settings.maxOutputTokens === null
+                        ? 'model'
+                        : 'custom'
+                    }
                     onChange={(e) =>
                       update('maxOutputTokens', e.target.value === 'model' ? null : 4096)
                     }
@@ -1191,7 +1405,7 @@ export default function App({
                   </select>
                 </label>
               </div>
-              {settings.maxOutputTokens !== null && (
+              {settings.answerBilling !== 'chatgpt' && settings.maxOutputTokens !== null && (
                 <label>
                   Maximum output tokens
                   <input

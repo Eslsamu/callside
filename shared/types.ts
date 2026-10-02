@@ -34,6 +34,7 @@ export interface SpeakerAttribution {
   segments: SpeakerSegment[];
 }
 export interface Settings {
+  answerBilling: 'api' | 'chatgpt';
   model: (typeof import('./models.js').ANSWER_MODELS)[number];
   reasoningEffort: import('./models.js').ReasoningEffort;
   fastMode: boolean;
@@ -78,6 +79,7 @@ export interface TokenUsage {
   reasoningTokens?: number;
 }
 export interface RequestUsage {
+  billing?: 'api' | 'chatgpt';
   timestamp: number;
   model: string;
   mode: 'manual' | 'auto';
@@ -92,7 +94,18 @@ export interface Suggestion {
   question: string;
   status: 'streaming' | 'done' | 'error';
 }
+export interface ChatGPTStatus {
+  welcomePending?: boolean;
+  available: boolean;
+  connected: boolean;
+  pending: boolean;
+  activeId?: string;
+  error: string;
+  accounts: Array<{ id: string; label: string; connected: boolean }>;
+  models: Array<{ id: string; name: string }>;
+}
 export interface Bootstrap {
+  chatgpt?: ChatGPTStatus;
   token: string;
   hasApiKey: boolean;
   models: string[];

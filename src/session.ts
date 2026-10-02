@@ -57,6 +57,7 @@ export function safeSettings(stored: unknown, defaults: Settings): Settings {
     result.reasoningEffort = reasoningOptions(result.model).includes(defaults.reasoningEffort)
       ? defaults.reasoningEffort
       : reasoningOptions(result.model)[0];
+  result.answerBilling = result.answerBilling === 'chatgpt' ? 'chatgpt' : 'api';
   result.captureMode = result.captureMode === 'diarized' ? 'diarized' : 'realtime';
   const budget = (stored as Record<string, unknown>).maxOutputTokens;
   if (budget === null) result.maxOutputTokens = null;

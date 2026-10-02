@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.4.0 - 2026-10-02
+
+- Add desktop ChatGPT sign-in for manual and automatic contextual suggestions using plan usage instead of API credit.
+- Encrypt account credentials, refresh sessions automatically, and support account selection and sign-out.
+- Load eligible GPT-6 models for the selected account and show the suggestion billing source.
+- Keep transcription and speaker attribution on the separate API connection, with no automatic paid fallback for suggestions.
+- Disable unsupported Fast mode and custom output caps in subscription mode.
+
 ## 0.3.3 - 2026-10-02
 
 - Remove promotional interface copy and use functional headings, recording states, and empty-state instructions.

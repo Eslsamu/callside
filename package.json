@@ -1,7 +1,7 @@
 {
   "name": "callside",
-  "version": "0.3.3",
-  "description": "Free, open-source Cluely alternative for live call assistance without typing. Bring your own OpenAI API key; API charges apply.",
+  "version": "0.4.0",
+  "description": "Open-source live call assistance without typing. Contextual suggestions, transcription, and global shortcuts.",
   "private": true,
   "type": "module",
   "main": "desktop/main.cjs",
@@ -28,6 +28,7 @@
     "@fontsource-variable/dm-sans": "^5.3.0",
     "dotenv": "^17.2.3",
     "express": "^5.1.0",
+    "jose": "^6.2.12",
     "lucide-react": "^0.468.0",
     "openai": "^6.0.0",
     "react": "^19.2.0",

@@ -1,3 +1,4 @@
+import { ChatGPTAuth, chatgptError, type SecretStore } from './chatgpt-auth.js';
 import { ANSWER_MODELS } from '../shared/models.js';
 import express, { type NextFunction, type Request, type Response } from 'express';
 import { createServer, type IncomingMessage } from 'node:http';
@@ -22,6 +23,9 @@ import { attachLocalTest } from './local-test-routes.js';
 import type { LocalEngine } from '../shared/local-test.js';
 
 export interface ServerOptions {
+  chatgptStore?: SecretStore;
+  openAuthBrowser?: (url: string) => Promise<void>;
+  chatgptAuth?: ChatGPTAuth;
   port?: number;
   production?: boolean;
   /** API-only and dependency injection allow tests without upstream calls. */
@@ -94,7 +98,14 @@ export async function startServer(options: ServerOptions = {}): Promise<RunningS
   });
   const provider = () =>
     (options.providerFactory ?? ((key) => new OpenAIProvider(key)))(getApiKey());
+  const chatgpt =
+    options.chatgptAuth ??
+    (options.chatgptStore && options.openAuthBrowser
+      ? new ChatGPTAuth(options.chatgptStore, options.openAuthBrowser)
+      : undefined);
+  await chatgpt?.init();
   const active = new Set<AbortController>();
+  const subscriptionRequests = new Set<AbortController>();
   let answerCount = 0;
   let diarizeCount = 0;
   const recent = { answer: [] as number[], diarize: [] as number[] };
@@ -129,6 +140,7 @@ export async function startServer(options: ServerOptions = {}): Promise<RunningS
     res.json({
       token,
       ...keyStatus(),
+      chatgpt: chatgpt?.status(),
       models: [...ANSWER_MODELS],
     });
   });
@@ -146,6 +158,50 @@ export async function startServer(options: ServerOptions = {}): Promise<RunningS
   });
   app.use('/api', express.json({ limit: '7mb', strict: true }));
   attachLocalTest(app, options.localEngine);
+  app.get('/api/chatgpt', (_req, res) =>
+    res.json(
+      chatgpt?.status() ?? {
+        available: false,
+        connected: false,
+        pending: false,
+        error: '',
+        accounts: [],
+        models: [],
+      },
+    ),
+  );
+  app.post('/api/chatgpt/:action', async (req, res) => {
+    if (!chatgpt) {
+      res.status(400).json({ error: 'ChatGPT sign-in requires the desktop app.' });
+      return;
+    }
+    try {
+      const action = req.params.action;
+      if (action === 'connect') {
+        if (req.body.accountId !== undefined && typeof req.body.accountId !== 'string')
+          throw new PublicError('Invalid account.');
+        await chatgpt.connect(req.body.accountId);
+      } else if (action === 'cancel') chatgpt.cancel();
+      else if (action === 'welcome') await chatgpt.acknowledgeWelcome();
+      else if (action === 'usage') await chatgpt.manageUsage();
+      else if (action === 'models') await chatgpt.listModels();
+      else if (action === 'disconnect' || action === 'select') {
+        for (const request of subscriptionRequests) request.abort();
+        if (action === 'disconnect') await chatgpt.disconnect();
+        else {
+          if (typeof req.body.accountId !== 'string')
+            throw new PublicError('Select a ChatGPT account.');
+          await chatgpt.select(req.body.accountId);
+        }
+      } else {
+        res.status(404).json({ error: 'Unknown ChatGPT action.' });
+        return;
+      }
+      res.json(chatgpt.status());
+    } catch (error) {
+      res.status(400).json({ error: chatgptError(error).message });
+    }
+  });
 
   app.post('/api/key', async (req, res) => {
     const parsed = keySchema.safeParse(req.body);
@@ -205,6 +261,7 @@ export async function startServer(options: ServerOptions = {}): Promise<RunningS
     res.on('close', cancel);
     return {
       signal: controller.signal,
+      controller,
       cleanup: () => {
         clearTimeout(timer);
         res.off('close', cancel);
@@ -224,13 +281,21 @@ export async function startServer(options: ServerOptions = {}): Promise<RunningS
       return;
     }
     const request = parsed.data;
-    if (!request.demo && !getApiKey()) {
+    const subscription = request.settings.answerBilling === 'chatgpt';
+    if (!request.demo && subscription && !chatgpt?.status().connected) {
+      res
+        .status(401)
+        .json({ error: 'Connect ChatGPT in desktop Settings first. No API fallback was used.' });
+      return;
+    }
+    if (!request.demo && !subscription && !getApiKey()) {
       res.status(401).json({ error: 'Add an OpenAI API key first.' });
       return;
     }
     if (limited('answer', res)) return;
     answerCount++;
-    const { signal, cleanup } = requestController(res, 65000);
+    const { signal, cleanup, controller } = requestController(res, 65000);
+    if (subscription) subscriptionRequests.add(controller);
     res.setHeader('Content-Type', 'text/event-stream; charset=utf-8');
     res.setHeader('Connection', 'keep-alive');
     res.setHeader('X-Accel-Buffering', 'no');
@@ -247,9 +312,21 @@ export async function startServer(options: ServerOptions = {}): Promise<RunningS
     let hasText = false;
     let usage: TokenUsage | undefined;
     try {
+      let answerProvider: AiProvider | undefined;
+      if (!request.demo && subscription) {
+        if (!chatgpt!.status().models.some((m) => m.id === request.settings.model))
+          await chatgpt!.listModels();
+        if (!chatgpt!.status().models.some((m) => m.id === request.settings.model))
+          throw new PublicError(
+            'This GPT-6 model is not available for your ChatGPT account. Refresh models in Settings.',
+          );
+        const access = await chatgpt!.accessToken();
+        signal.throwIfAborted();
+        answerProvider = new OpenAIProvider(access, 'chatgpt');
+      }
       const stream = request.demo
         ? demoAnswer(request, signal)
-        : provider().answer(buildAnswerInput(request), signal);
+        : (answerProvider ?? provider()).answer(buildAnswerInput(request), signal);
       for await (const event of stream) {
         if (signal.aborted) throw new DOMException('Aborted', 'AbortError');
         if (event.type === 'delta') {
@@ -279,10 +356,14 @@ export async function startServer(options: ServerOptions = {}): Promise<RunningS
         send({ type: 'done', ...(usage ? { usage } : {}) });
       }
     } catch (error) {
-      send({ type: 'error', message: publicError(error) });
+      send({
+        type: 'error',
+        message: subscription ? chatgptError(error).message : publicError(error),
+      });
     } finally {
       clearInterval(heartbeat);
       cleanup();
+      subscriptionRequests.delete(controller);
       answerCount--;
       res.end();
     }
@@ -386,6 +467,7 @@ export async function startServer(options: ServerOptions = {}): Promise<RunningS
       if (closed) return;
       closed = true;
       for (const controller of active) controller.abort();
+      chatgpt?.cancel();
       detachRealtime();
       await vite?.close();
       const closing = new Promise<void>((resolveClose) => server.close(() => resolveClose()));

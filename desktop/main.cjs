@@ -7,6 +7,7 @@ const {
   session,
   dialog,
   safeStorage,
+  shell,
 } = require('electron');
 const { createKeyStore } = require('./key-store.cjs');
 const { createTemplateStore } = require('./template-store.cjs');
@@ -101,6 +102,22 @@ async function boot() {
     port: 0,
     production: true,
     keyStore: createKeyStore(path.join(app.getPath('userData'), 'openai-key.enc'), safeStorage),
+    chatgptStore: createKeyStore(
+      path.join(app.getPath('userData'), 'chatgpt-auth.enc'),
+      safeStorage,
+      process.platform,
+      (value) => value.length <= 1_000_000 && Boolean(JSON.parse(value).hostId),
+    ),
+    openAuthBrowser: (url) => {
+      const target = new URL(url);
+      if (
+        url !== 'https://chatgpt.com/settings/usage' &&
+        (target.origin !== 'https://auth.openai.com' ||
+          target.pathname !== '/api/accounts/authorize')
+      )
+        throw new Error('Invalid authorization URL.');
+      return shell.openExternal(url);
+    },
   });
   appOrigin = new URL(server.url).origin;
 

@@ -44,6 +44,12 @@ try {
   ).toEqual({ encrypt: 'function', decrypt: 'function' });
   await page.getByRole('button', { name: 'Settings', exact: true }).click();
   await expect(page.getByLabel('Remember API key on this device')).toBeChecked();
+  await expect(
+    page.getByRole('button', { name: 'Continue with ChatGPT', exact: true }),
+  ).toBeEnabled();
+  await expect(
+    page.getByRole('combobox', { name: 'Pay for suggestions with', exact: true }),
+  ).toHaveValue('api');
   await expect(page.getByLabel('Identify call speakers in the background')).toBeChecked();
   await expect(page.getByRole('button', { name: 'Save API key', exact: true })).toBeDisabled();
   await page.getByRole('button', { name: 'Workshop', exact: true }).click();

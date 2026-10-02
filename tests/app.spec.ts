@@ -754,3 +754,67 @@ test('automatic microphone trigger waits for a microphone segment', async ({ pag
   );
   expect(requests[0].transcript.length).toBeGreaterThan(1);
 });
+
+test('ChatGPT sign-in selects plan billing, loads models, and preserves it in templates', async ({
+  page,
+}) => {
+  let status = {
+    available: true,
+    connected: false,
+    pending: false,
+    error: '',
+    activeId: 'test-account',
+    accounts: [] as Array<{ id: string; label: string; connected: boolean }>,
+    models: [] as Array<{ id: string; name: string }>,
+  };
+  await page.route('**/api/bootstrap', (route) =>
+    route.fulfill({
+      json: { token: 'test-token', hasApiKey: false, models: ['gpt-6-luna'], chatgpt: status },
+    }),
+  );
+  await page.route('**/api/chatgpt/**', (route) => {
+    const action = route.request().url().split('/').at(-1);
+    if (action === 'connect')
+      status = {
+        ...status,
+        connected: true,
+        accounts: [{ id: 'test-account', label: 'Test account', connected: true }],
+      };
+    if (action === 'models')
+      status = { ...status, models: [{ id: 'gpt-6.1-sol', name: 'GPT-6.1 Sol' }] };
+    if (action === 'disconnect') status = { ...status, connected: false, models: [] };
+    return route.fulfill({ json: status });
+  });
+  let payload: Record<string, any> | undefined;
+  await page.route('**/api/answer', (route) => {
+    payload = route.request().postDataJSON();
+    return route.fulfill({
+      contentType: 'text/event-stream',
+      body: 'data: {"type":"delta","text":"Subscription test suggestion"}\n\ndata: {"type":"done"}\n\n',
+    });
+  });
+  await page.goto('/');
+  await page.getByRole('button', { name: 'Settings', exact: true }).click();
+  await page.getByRole('button', { name: 'Continue with ChatGPT', exact: true }).click();
+  await expect(page.getByLabel('Pay for suggestions with')).toHaveValue('chatgpt');
+  await expect(page.getByRole('combobox', { name: 'Task model', exact: true })).toHaveValue(
+    'gpt-6.1-sol',
+  );
+  await expect(page.getByLabel('Fast mode', { exact: true })).toBeDisabled();
+  await expect(
+    page.getByRole('combobox', { name: 'Output token limit', exact: true }),
+  ).toBeDisabled();
+  await page.getByLabel('Reference material', { exact: true }).fill('Explain this course topic.');
+  await page.getByRole('button', { name: 'Save template', exact: true }).click();
+  await page.reload();
+  await page.getByRole('button', { name: 'Settings', exact: true }).click();
+  await expect(page.getByLabel('Pay for suggestions with')).toHaveValue('chatgpt');
+  await page.getByRole('button', { name: 'Conversation', exact: true }).click();
+  await page.getByRole('button', { name: /^Help now/ }).click();
+  await expect(page.getByTestId('suggestion')).toContainText('Subscription test suggestion');
+  expect(payload?.settings.answerBilling).toBe('chatgpt');
+  expect(payload?.demo).toBe(false);
+  await page.getByRole('button', { name: 'Settings', exact: true }).click();
+  await page.getByRole('button', { name: 'Sign out of ChatGPT', exact: true }).click();
+  await expect(page.getByLabel('Pay for suggestions with')).toHaveValue('chatgpt');
+});

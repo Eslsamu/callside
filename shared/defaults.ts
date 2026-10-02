@@ -1,6 +1,7 @@
 import type { Settings } from './types.js';
 import { DEFAULT_TASK_PROMPT, DEFAULT_AUTO_PROMPT } from './tasks.js';
 export const DEFAULT_SETTINGS: Settings = {
+  answerBilling: 'api',
   model: 'gpt-6-luna',
   reasoningEffort: 'none',
   fastMode: false,

@@ -115,8 +115,18 @@ export function publicError(error: unknown): string {
 
 export class OpenAIProvider implements AiProvider {
   private readonly client: OpenAI;
-  constructor(apiKey: string) {
-    this.client = new OpenAI({ apiKey, maxRetries: 0, timeout: 60000 });
+  constructor(
+    apiKey: string,
+    private readonly billing: 'api' | 'chatgpt' = 'api',
+  ) {
+    this.client = new OpenAI({
+      apiKey,
+      ...(billing === 'chatgpt'
+        ? { baseURL: 'https://api.openai.com/v1', organization: null, project: null }
+        : {}),
+      maxRetries: 0,
+      timeout: 60000,
+    });
   }
 
   async *answer(input: AnswerInput, signal: AbortSignal): AsyncIterable<ProviderAnswerEvent> {
@@ -124,7 +134,9 @@ export class OpenAIProvider implements AiProvider {
       {
         model: input.model,
         reasoning: { effort: input.reasoningEffort },
-        service_tier: input.fastMode ? 'priority' : 'default',
+        ...(this.billing === 'api'
+          ? { service_tier: input.fastMode ? ('priority' as const) : ('default' as const) }
+          : {}),
         input: [
           { role: 'developer', content: input.instructions },
           {
@@ -133,15 +145,21 @@ export class OpenAIProvider implements AiProvider {
               {
                 type: 'input_text',
                 text: JSON.stringify({ referenceMaterial: input.referenceMaterial }),
-                prompt_cache_breakpoint: { mode: 'explicit' },
+                ...(this.billing === 'api'
+                  ? { prompt_cache_breakpoint: { mode: 'explicit' as const } }
+                  : {}),
               },
             ],
           },
           { role: 'developer', content: input.modeInstructions },
           { role: 'user', content: input.input },
         ],
-        prompt_cache_options: { mode: 'explicit', ttl: '30m' },
-        ...(input.maxOutputTokens === null ? {} : { max_output_tokens: input.maxOutputTokens }),
+        ...(this.billing === 'api'
+          ? { prompt_cache_options: { mode: 'explicit' as const, ttl: '30m' as const } }
+          : {}),
+        ...(this.billing === 'chatgpt' || input.maxOutputTokens === null
+          ? {}
+          : { max_output_tokens: input.maxOutputTokens }),
         stream: true,
         store: false,
       },
@@ -169,11 +187,15 @@ export class OpenAIProvider implements AiProvider {
           };
       } else if (event.type === 'response.incomplete')
         throw new PublicError(
-          'The result reached an output limit. Check the output token limit and reasoning strength in Settings.',
+          this.billing === 'chatgpt'
+            ? 'ChatGPT returned an incomplete result. Try lower reasoning or a shorter task.'
+            : 'The result reached an output limit. Check the output token limit and reasoning strength in Settings.',
         );
       else if (event.type === 'response.failed' || event.type === 'error')
         throw new PublicError(
-          'OpenAI could not finish the answer. Check model access and API limits.',
+          this.billing === 'chatgpt'
+            ? 'ChatGPT could not finish the suggestion. Check your plan usage and model access. No API fallback was used.'
+            : 'OpenAI could not finish the answer. Check model access and API limits.',
         );
     }
     if (!complete) throw new PublicError('The answer stream ended unexpectedly.');

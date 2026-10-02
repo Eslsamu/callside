@@ -6,7 +6,7 @@ Callside is an MIT-licensed desktop call copilot. It transcribes microphone and 
 
 It is a free, open-source alternative to Cluely for live conversation assistance. See the [comparison section](#an-alternative-to-cluely-final-round-ai-and-lockedin-ai) for differences and limitations.
 
-**The software is free. OpenAI API usage is paid separately through your own API account.** There is no Callside subscription, license fee, or account requirement. Live cloud transcription, background speaker attribution, and generated suggestions incur provider charges. The built-in demo is free and needs no API key.
+**The software is free. OpenAI API usage is paid separately through your own API account.** There is no Callside subscription, license fee, or account requirement. Live cloud transcription and background speaker attribution incur API charges. Suggestions can use your ChatGPT plan or API credit. The built-in demo is free and needs no API key.
 
 [Quick start](#quick-start) · [Compare alternatives](docs/ALTERNATIVES.md) · [Contributing](CONTRIBUTING.md) · [Roadmap](docs/ROADMAP.md) · [MIT license](LICENSE)
 
@@ -81,7 +81,16 @@ npm start
 
 ## ChatGPT subscription or API key?
 
-This version uses a **Platform API key**. It does not log into ChatGPT, reuse browser cookies, or read Codex credentials. ChatGPT sign-in is available for supported OpenAI products; OpenAI's authentication documentation directs general API calls to Platform API keys, with API usage billed through the Platform account. A ChatGPT subscription is therefore not configured as payment for Callside's transcription or Responses requests. See the [official OpenAI authentication documentation](https://learn.chatgpt.com/docs/auth#openai-authentication).
+The desktop app supports **Continue with ChatGPT** for contextual suggestions using OpenAI's [official ChatGPT plan usage flow](https://developers.openai.com/siwc/token-sharing-open-source). There is no extra Callside subscription. Plan eligibility, available models, and usage limits are controlled by OpenAI. Transcription and speaker attribution still require an API key and incur API charges.
+
+1. Open **Settings → Suggestion connection → Continue with ChatGPT**.
+2. Complete sign-in and approve plan usage in your system browser, then return to Callside.
+3. Select **ChatGPT subscription** and an available GPT-6 model. Click **Save template** to retain this billing choice and your task settings after restarting.
+4. Keep your existing API key for audio. Use **Help now**, F8, or **Automatic hints** as before; no typing is required.
+
+Credentials are encrypted using the OS key store and refreshed automatically. You can switch accounts, reconnect, sign out, and open ChatGPT usage settings. Tokens are never saved in templates or exports. Subscription errors **never fall back to API billing**. The browser-only version currently supports API keys only.
+
+In subscription mode, custom output caps, priority/Fast mode, and explicit cache controls are omitted. Reasoning strength, reference material, streamed suggestions, and automatic triggers remain available. Account-specific GPT-6 model availability comes from OpenAI; a subscription does not guarantee access to every model. The built-in demo stays synthetic and does not test your subscription connection.
 
 The defaults are `gpt-live-transcribe` for live transcription, `gpt-4o-transcribe-diarize` for the diarization mode, and `gpt-6-luna` for tasks. Access depends on your API project. Task models are restricted to GPT-6 Luna, GPT-6 Sol, GPT-6.1 Sol, and GPT-6 Astra. Reasoning strength is configurable: None, Low, Medium, High, Extra high, or Maximum; Astra and GPT-6.1 Sol start at Low. Fast mode requests priority processing where available at 2× standard token rates. It is off by default. The output budget includes both reasoning and visible answer tokens. Check [OpenAI API pricing](https://developers.openai.com/api/docs/pricing) and your project limits before a long call. Automatic mode can make repeated model requests, including requests whose result is silence.
 

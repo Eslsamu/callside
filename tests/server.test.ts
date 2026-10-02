@@ -67,6 +67,18 @@ function events(text: string) {
 }
 
 describe('local HTTP API', () => {
+  it('does not fall back to API credit when ChatGPT is selected but disconnected', async () => {
+    const provider = simpleProvider(['must not run']);
+    const spy = vi.spyOn(provider, 'answer');
+    const server = await running(provider);
+    const response = await server.post(
+      '/api/answer',
+      body({ settings: { ...DEFAULT_SETTINGS, answerBilling: 'chatgpt' } }),
+    );
+    expect(response.status).toBe(401);
+    expect(await response.text()).toContain('No API fallback');
+    expect(spy).not.toHaveBeenCalled();
+  });
   it('requires exact local host/origin and token, without CORS or credential exposure', async () => {
     const server = await running();
     expect(server.bootstrap).toEqual({

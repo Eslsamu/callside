@@ -3,7 +3,12 @@ const { dirname } = require('node:path');
 const { randomBytes } = require('node:crypto');
 
 // Only ciphertext is written. The OS encryption provider remains in the main process.
-function createKeyStore(file, encryption, platform = process.platform) {
+function createKeyStore(
+  file,
+  encryption,
+  platform = process.platform,
+  validate = (value) => /^[\x21-\x7e]{12,500}$/.test(value),
+) {
   const available = async () => {
     if (
       !(await encryption.isAsyncEncryptionAvailable()) ||
@@ -34,8 +39,7 @@ function createKeyStore(file, encryption, platform = process.platform) {
       }
       await available();
       const decrypted = await encryption.decryptStringAsync(encrypted);
-      if (!/^[\x21-\x7e]{12,500}$/.test(decrypted.result))
-        throw new Error('The saved key is invalid.');
+      if (!validate(decrypted.result)) throw new Error('The saved key is invalid.');
       if (decrypted.shouldReEncrypt) await save(decrypted.result);
       return decrypted.result;
     },

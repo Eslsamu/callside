@@ -24,6 +24,10 @@ Do not put the server behind a public reverse proxy, enable permissive CORS, or 
 
 The Electron renderer uses an isolated preload bridge with a narrow interface. Review changes to permissions, navigation, IPC, and capture handlers with particular care. Do not enable Node integration in the renderer.
 
+## ChatGPT connection
+
+The desktop app saves OAuth credentials only as OS-encrypted ciphertext in `chatgpt-auth.enc`. It uses a loopback-only, one-use callback with PKCE, state and nonce, and validates signed ID tokens against OpenAI's JWKS. A stable opaque host ID and issued account registrations survive sign-out. Refresh-token rotation is serialized and saved atomically. Sign-out clears local credentials and attempts remote revocation; if offline, the UI directs users to disconnect Callside in ChatGPT Settings. Credentials are not exposed to the renderer, templates, exports, or logs. Subscription inference is pinned to the official OpenAI Responses endpoint and cannot fall back to an API key.
+
 ## Reporting a vulnerability
 
 If the published repository offers **Security → Report a vulnerability**, use that private reporting channel. If private reporting has not been enabled, ask a repository maintainer for a private contact method without posting exploit details or sensitive data in a public issue. Never attach API keys, raw private audio, or identifiable call transcripts.

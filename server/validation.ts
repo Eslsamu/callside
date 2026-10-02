@@ -14,6 +14,7 @@ const model = z
   .regex(/^[a-zA-Z0-9._:-]+$/);
 export const settingsSchema = z
   .object({
+    answerBilling: z.enum(['api', 'chatgpt']).default('api'),
     model: z.enum(ANSWER_MODELS),
     reasoningEffort: z.enum(REASONING_EFFORTS).default(DEFAULT_SETTINGS.reasoningEffort),
     fastMode: z.boolean().default(false),

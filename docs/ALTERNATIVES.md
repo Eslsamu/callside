@@ -1,6 +1,6 @@
 # Callside vs. Cluely, Final Round AI, and LockedIn AI
 
-Callside is a free, MIT-licensed, open-source alternative for live conversation assistance. The application has no subscription fee. You supply an OpenAI API key and pay the provider for transcription and generated suggestions.
+Callside is a free, MIT-licensed, open-source alternative for live conversation assistance. The application has no subscription fee. You supply an OpenAI API key for transcription. Suggestions can use your ChatGPT subscription through the desktop sign-in flow or your API credit. Plan limits and model availability apply.
 
 ## What these tools have in common
 
