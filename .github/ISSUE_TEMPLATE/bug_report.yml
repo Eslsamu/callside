@@ -1,0 +1,39 @@
+name: Bug report
+description: Report a reproducible Callside problem.
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: Do not include API keys, private reference material, real transcripts, or recordings. For vulnerabilities, follow SECURITY.md.
+  - type: input
+    id: version
+    attributes:
+      label: Callside version or commit
+      placeholder: v0.3.3
+    validations:
+      required: true
+  - type: input
+    id: environment
+    attributes:
+      label: OS and app mode
+      placeholder: macOS version, Apple Silicon or Intel, packaged desktop or browser
+    validations:
+      required: true
+  - type: textarea
+    id: reproduce
+    attributes:
+      label: Steps to reproduce
+      description: Use synthetic input where possible. Include relevant model and audio-source settings.
+    validations:
+      required: true
+  - type: textarea
+    id: result
+    attributes:
+      label: Expected and actual behavior
+    validations:
+      required: true
+  - type: textarea
+    id: evidence
+    attributes:
+      label: Error message or sanitized screenshot
+      description: Remove private conversation content and credentials before submitting.

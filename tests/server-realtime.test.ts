@@ -51,7 +51,8 @@ describe('Realtime proxy with a local provider fixture', () => {
         type: 'configure',
         model: 'gpt-live-transcribe',
         language: 'de',
-        prompt: 'Sales call',
+        // Old app builds sent a reference prefix here. The server must discard it.
+        prompt: 'Course reference material. '.repeat(1200),
       }),
     );
     const [upstream] = (await connected) as [WebSocket];
@@ -67,7 +68,6 @@ describe('Realtime proxy with a local provider fixture', () => {
             transcription: {
               model: 'gpt-live-transcribe',
               languages: ['de'],
-              prompt: 'Sales call',
               delay: 'low',
             },
           },
@@ -165,12 +165,43 @@ describe('Realtime proxy with a local provider fixture', () => {
     });
   });
 
+  it('explains a transcription length error without blaming balance or exposing provider text', async () => {
+    const fixture = await setup();
+    const connected = once(fixture.upstreamServer, 'connection');
+    fixture.client.send(JSON.stringify({ type: 'configure', model: 'gpt-live-transcribe' }));
+    const [upstream] = (await connected) as [WebSocket];
+    await once(upstream, 'message');
+    const closed = once(fixture.client, 'close');
+    upstream.send(
+      JSON.stringify({
+        type: 'error',
+        error: {
+          code: 'string_above_max_length',
+          param: 'session.audio.input.transcription.prompt',
+          message: 'Private course material and secret-key-do-not-expose',
+        },
+      }),
+    );
+    await closed;
+    expect(fixture.received).toEqual([
+      {
+        type: 'error',
+        error: {
+          code: 'string_above_max_length',
+          message: expect.stringContaining('transcription prompt'),
+        },
+      },
+    ]);
+    const result = JSON.stringify(fixture.received);
+    expect(result).toContain('separate from the Reference material limit');
+    expect(result).not.toMatch(/balance|Private course|secret-key/);
+  });
+
   it('uses the correct language field for both model generations', () => {
     const legacy = transcriptionSession({
       type: 'configure',
       model: 'gpt-4o-mini-transcribe',
       language: 'de',
-      prompt: '',
     });
     expect(legacy.session.audio.input.transcription).toEqual({
       model: 'gpt-4o-mini-transcribe',
@@ -180,7 +211,6 @@ describe('Realtime proxy with a local provider fixture', () => {
       type: 'configure',
       model: 'gpt-transcribe',
       language: 'de',
-      prompt: '',
     });
     expect(modern.session.audio.input.transcription).toEqual({
       model: 'gpt-transcribe',

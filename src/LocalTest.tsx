@@ -202,7 +202,7 @@ export default function LocalTest() {
         <span>Local transcription test</span>
       </header>
       <section className="local-test-heading">
-        <h1>Speak. See how quickly it lands.</h1>
+        <h1>Microphone transcription test</h1>
         <p>
           Test your microphone with local Whisper. Speak naturally for 30–60 seconds, pause between
           a few phrases, then stop and review.
@@ -294,7 +294,7 @@ export default function LocalTest() {
                 <p>
                   {phase === 'listening'
                     ? 'Listening for your first phrase…'
-                    : 'Your words will appear here.'}
+                    : 'Start the microphone test to see a transcript.'}
                 </p>
                 <span>Live drafts update as you speak. A short pause finalizes each phrase.</span>
               </div>

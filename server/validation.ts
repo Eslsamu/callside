@@ -85,7 +85,6 @@ export const configureSchema = z.object({
     'gpt-4o-mini-transcribe-2025-12-15',
   ]),
   language: language.default(''),
-  prompt: z.string().max(2000).default(''),
 });
 export type RealtimeConfig = z.infer<typeof configureSchema>;
 export const audioEventSchema = z.discriminatedUnion('type', [

@@ -2,6 +2,18 @@
 
 Small, reviewable contributions are welcome. Explain the user problem, the resulting behavior, and how you verified the change. For larger changes, discuss the intended approach in an issue first.
 
+See the [roadmap](docs/ROADMAP.md) for current priorities and [community conduct](CODE_OF_CONDUCT.md) for participation guidelines. While the repository is private, contributors need access from the owner; the public fork-and-pull-request workflow applies after publication.
+
+## Contribution workflow
+
+1. Search existing issues and discuss larger changes before implementation.
+2. Create a branch for one focused change (or fork the project when it is public).
+3. Use synthetic data and the demo to develop without paid API calls.
+4. Run the relevant checks below and describe their limits in the pull request.
+5. Update documentation when setup, costs, permissions, or behavior change.
+
+Documentation corrections, accessibility improvements, regression tests, and reproducible platform reports are useful first contributions. Please avoid promotional text in the application UI. Discoverability and product comparisons belong in the README and documentation, with sources and honest limits.
+
 ## Local setup
 
 Use Node.js 22.12 or newer.
@@ -29,5 +41,7 @@ npm run check
 - Use readable prose without em dashes.
 
 The public API boundary is described in [the contract](docs/CONTRACT.md). [Architecture](docs/ARCHITECTURE.md) describes where to add providers. [Testing](docs/TESTING.md) explains automated and manual checks.
+
+Maintainers should follow [Releasing](docs/RELEASING.md) for version tags, packages, and the eventual public release.
 
 By submitting a contribution, you agree that it may be distributed under this repository's MIT license.

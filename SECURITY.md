@@ -12,7 +12,7 @@ Protection depends on the OS provider and local account security. Unsigned macOS
 
 Session transcripts and suggestions stay in memory unless the user exports them. Exported JSON/Markdown are ordinary files containing conversation content. This application does not control their later storage, backups, or sharing. OpenAI processes submitted data under the API project's applicable policies; local memory handling does not determine provider-side retention.
 
-The optional **Save template** action stores settings, prompts, and background context in the renderer's `localStorage`. It excludes keys, transcripts, and suggestions. This is ordinary local browser storage, not encrypted secret storage. **Reset** removes the template. Take care when saving confidential context on a shared device.
+The optional **Save template** action stores settings, prompts, and reference material. Desktop mode uses `template.json` in Electron's per-user app data directory, written atomically with owner-only file permissions. The main process accepts only known settings fields through IPC from the trusted top-level app window. Browser mode uses `localStorage`. Both exclude keys, transcripts, and suggestions; template content is not encrypted. **Reset** removes the saved template. Take care when saving confidential context on a shared device.
 
 Background attribution sends an additional copy of call audio and up to four temporary voice reference clips to OpenAI. Clips remain in capture memory and are cleared when capture ends; they are not included in saved templates, JSON, or Markdown exports. Resulting speaker labels are estimates, not verified personal identities.
 

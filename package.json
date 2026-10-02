@@ -1,7 +1,7 @@
 {
   "name": "callside",
-  "version": "0.3.1",
-  "description": "A local, open source live call copilot powered by OpenAI.",
+  "version": "0.3.3",
+  "description": "Free, open-source Cluely alternative for live call assistance without typing. Bring your own OpenAI API key; API charges apply.",
   "private": true,
   "type": "module",
   "main": "desktop/main.cjs",
@@ -54,6 +54,8 @@
   "build": {
     "appId": "org.callside.app",
     "productName": "Callside",
+    "artifactName": "${productName}-${version}-${os}-${arch}.${ext}",
+    "afterAllArtifactBuild": "./scripts/release-links.mjs",
     "files": [
       "dist/**/*",
       "dist-server/**/*",
@@ -61,7 +63,7 @@
       "package.json"
     ],
     "directories": {
-      "output": "release"
+      "output": "release/v${version}"
     },
     "mac": {
       "category": "public.app-category.productivity",
@@ -90,5 +92,25 @@
     },
     "icon": "desktop/icon.png"
   },
-  "author": "Callside contributors"
+  "author": "Callside contributors",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Eslsamu/callside.git"
+  },
+  "homepage": "https://github.com/Eslsamu/callside#readme",
+  "bugs": {
+    "url": "https://github.com/Eslsamu/callside/issues"
+  },
+  "keywords": [
+    "cluely-alternative",
+    "open-source",
+    "meeting-assistant",
+    "live-transcription",
+    "call-copilot",
+    "ai-assistant",
+    "electron",
+    "openai",
+    "workshop",
+    "sales-assistant"
+  ]
 }

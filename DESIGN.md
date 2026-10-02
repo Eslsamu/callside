@@ -137,6 +137,7 @@ The system is flat and restrained. Thin separators organize related controls; sm
 - Pale mint for the main action, active capture, and keyboard focus.
 - Visible capture state with an available stop action.
 - English interface copy and self-hosted typography.
+- Functional labels, status, and instructions only; no promotional slogans or decorative copy.
 
 ## Colors
 
@@ -167,7 +168,7 @@ The secondary button uses a dark green fill and mint text. Warm amber identifies
 
 ## Typography
 
-**Interface font:** DM Sans Variable, with a sans-serif fallback. The installed Fontsource package bundles the font locally. **Measurement font:** platform monospace for time values and keycaps. The empty answer state uses one Georgia opening quotation mark; this is not a second headline family.
+**Interface font:** DM Sans Variable, with a sans-serif fallback. The installed Fontsource package bundles the font locally. **Measurement font:** platform monospace for time values and keycaps.
 
 The answer is the largest sustained reading text. Page headings orient the operator without becoming promotional display typography. Supporting labels are compact and sentence case.
 

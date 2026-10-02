@@ -34,15 +34,8 @@ import { startCapture } from './audio/capture';
 import { TranscriptReconciler } from './audio/reconcile';
 import { streamAnswer } from './api';
 import { DEMO_TURNS, safeSettings, sessionMarkdown } from './session';
+import { saveTemplate, removeTemplate } from './template';
 
-const settingsKey = 'callside.settings.v1';
-function loadSettings(): Settings {
-  try {
-    return safeSettings(JSON.parse(localStorage.getItem(settingsKey) || 'null'), DEFAULT_SETTINGS);
-  } catch {
-    return { ...DEFAULT_SETTINGS };
-  }
-}
 const time = (value: number) =>
   new Date(value).toLocaleTimeString('en-GB', {
     hour: '2-digit',
@@ -50,8 +43,14 @@ const time = (value: number) =>
     second: '2-digit',
   });
 
-export default function App() {
-  const [settings, setSettings] = useState<Settings>(loadSettings);
+export default function App({
+  initialSettings,
+  initialError,
+}: {
+  initialSettings: Settings;
+  initialError: string;
+}) {
+  const [settings, setSettings] = useState<Settings>(initialSettings);
   const [bootstrap, setBootstrap] = useState<Bootstrap | null>(null);
   const [view, setView] = useState<'session' | 'settings'>('session');
   const [entries, setEntries] = useState<TranscriptEntry[]>([]);
@@ -65,7 +64,11 @@ export default function App() {
   const [consent, setConsent] = useState(false);
   const [question, setQuestion] = useState('');
   const [busy, setBusy] = useState(false);
-  const [error, setError] = useState('');
+  const [error, setError] = useState(initialError);
+  const [templateBusy, setTemplateBusy] = useState(false);
+  const [templateFeedback, setTemplateFeedback] = useState<{ text: string; error: boolean } | null>(
+    null,
+  );
   const [notice, setNotice] = useState('');
   const [apiKey, setApiKey] = useState('');
   const [keyBusy, setKeyBusy] = useState(false);
@@ -96,6 +99,11 @@ export default function App() {
   const shortcuts = useRef<Record<string, boolean>>({});
   const reconciler = useRef(new TranscriptReconciler());
   const echoNotified = useRef(false);
+  const lastTemplateSettings = useRef(settings);
+
+  useEffect(() => {
+    if (settings !== lastTemplateSettings.current) setTemplateFeedback(null);
+  }, [settings]);
 
   useEffect(() => {
     const abort = new AbortController();
@@ -490,6 +498,39 @@ export default function App() {
     }
   }
 
+  async function persistTemplate(reset = false) {
+    if (templateBusy) return;
+    const snapshot = settings;
+    setTemplateBusy(true);
+    setTemplateFeedback(null);
+    try {
+      if (reset) {
+        await removeTemplate();
+        const defaults = { ...DEFAULT_SETTINGS };
+        lastTemplateSettings.current = defaults;
+        setSettings(defaults);
+      } else await saveTemplate(snapshot);
+      if (!reset) lastTemplateSettings.current = latest.current.settings;
+      setTemplateFeedback({
+        text: reset
+          ? 'Settings reset and saved template removed.'
+          : latest.current.settings !== snapshot
+            ? 'Template saved. New edits have not been saved yet.'
+            : 'Template saved. It will load automatically when you reopen Callside.',
+        error: false,
+      });
+    } catch {
+      setTemplateFeedback({
+        text: reset
+          ? 'Could not remove the saved template. Your settings have been kept.'
+          : 'Could not save the template. Your edits are still here; please try again.',
+        error: true,
+      });
+    } finally {
+      setTemplateBusy(false);
+    }
+  }
+
   const update = <K extends keyof Settings>(key: K, value: Settings[K]) =>
     setSettings((s) => ({ ...s, [key]: value }));
   async function discoverDevices() {
@@ -607,7 +648,7 @@ export default function App() {
             </button>
           )}
           <span className="local-badge">
-            <span className="small-dot" /> Local on your device
+            <span className="small-dot" /> Local server
           </span>
         </div>
       </header>
@@ -633,8 +674,7 @@ export default function App() {
         <main className="session-view">
           <section className="session-top" aria-label="Recording controls">
             <div className="session-heading">
-              <h1>Room for your conversation.</h1>
-              <p>Listen. Stay present. Find your next words here.</p>
+              <h1>Conversation</h1>
             </div>
             <div className="session-actions">
               {!live && entries.length > 0 && (
@@ -672,7 +712,11 @@ export default function App() {
                 ? 'Demo · synthetic conversation'
                 : listening
                   ? 'Transcribing'
-                  : 'Ready when you are'}
+                  : starting
+                    ? 'Connecting'
+                    : stopping
+                      ? 'Finishing transcription'
+                      : 'Not recording'}
               <span className="timer">{minutes}</span>
             </div>
             {!live && (
@@ -744,10 +788,11 @@ export default function App() {
                     <div className="empty-wave">
                       <Activity size={42} strokeWidth={1.2} />
                     </div>
-                    <h3>Your conversation appears here.</h3>
+                    <h3>No transcript yet</h3>
                     <p>
-                      Your microphone and call audio are transcribed live. Follow what is being said
-                      as you listen.
+                      {live
+                        ? 'Waiting for speech from the enabled audio sources.'
+                        : 'Start call to transcribe the enabled audio sources.'}
                     </p>
                     <button
                       className="text-button"
@@ -809,14 +854,14 @@ export default function App() {
 
             <section className="assistant-pane" aria-labelledby="assistant-title">
               <div className="pane-header">
-                <h2 id="assistant-title">Your next thought</h2>
+                <h2 id="assistant-title">Results</h2>
                 <span className="model-label">{settings.model}</span>
               </div>
               <label className="auto-control">
                 <span>
                   <Zap size={16} />
                   <span>
-                    Automatic hints<small>The model decides when to help.</small>
+                    Automatic hints<small>Uses the automatic mode prompt in Settings.</small>
                   </span>
                 </span>
                 <input
@@ -854,7 +899,7 @@ export default function App() {
                           ? 'Drafting …'
                           : current.status === 'error'
                             ? 'Incomplete result'
-                            : 'Based on your task and available context.'}
+                            : 'Complete'}
                       </span>
                       <button
                         className="icon-button"
@@ -867,20 +912,11 @@ export default function App() {
                   </article>
                 ) : (
                   <div className="empty-answer">
-                    <span className="answer-mark">“</span>
-                    <h3>
-                      Useful help.
-                      <br />
-                      When you need it.
-                    </h3>
+                    <h3>No results yet</h3>
                     <p>
-                      Press F8 for help with what is happening now, based on your task and reference
-                      material.
+                      Press F8 or Help now to run your task using the transcript and reference
+                      material. Configure the task in Settings.
                     </p>
-                    <div className="shortcut-demo">
-                      <kbd>F8</kbd>
-                      <span>or use the button below</span>
-                    </div>
                   </div>
                 )}
                 {busy && !current?.text && (
@@ -964,7 +1000,6 @@ export default function App() {
               {demo ? 'Demo data · no audio recorded' : 'Audio sent to OpenAI · no local recording'}
               <span className="footer-divider">/</span>Transcript kept in this session only
             </span>
-            <span>Open source. Your workflow.</span>
           </footer>
         </main>
       ) : (
@@ -992,8 +1027,7 @@ export default function App() {
           )}
           <div className="settings-heading">
             <div>
-              <h1>Set up for your conversation.</h1>
-              <p>Audio, models, and instructions in one place.</p>
+              <h1>Settings</h1>
             </div>
             <button className="quiet-button" onClick={() => setView('session')}>
               Back to conversation
@@ -1361,7 +1395,7 @@ export default function App() {
               </fieldset>
             </section>
             <section className="settings-section prompt-settings">
-              <h2>How your assistant should help</h2>
+              <h2>Task configuration</h2>
               <div className="preset-buttons">
                 {Object.entries(TASK_PRESETS).map(([id, preset]) => (
                   <button
@@ -1458,34 +1492,32 @@ export default function App() {
             </section>
           </div>
           <div className="settings-bottom">
-            <p>
-              Changes apply immediately. Saving a template stores prompts and context on this
-              device, without keys or transcripts.
-            </p>
+            <div className="template-copy">
+              <p>
+                Changes apply immediately. Saving a template stores prompts and context on this
+                device, without keys or transcripts.
+              </p>
+              {templateFeedback && (
+                <p
+                  className={`template-feedback ${templateFeedback.error ? 'error' : ''}`}
+                  role={templateFeedback.error ? 'alert' : 'status'}
+                  data-testid="template-feedback"
+                >
+                  {templateFeedback.text}
+                </p>
+              )}
+            </div>
             <button
               className="secondary-button"
-              onClick={() => {
-                try {
-                  localStorage.setItem(
-                    settingsKey,
-                    JSON.stringify(safeSettings(settings, DEFAULT_SETTINGS)),
-                  );
-                  setNotice('Template saved on this device.');
-                } catch {
-                  setError('Could not save the template.');
-                }
-              }}
+              disabled={templateBusy}
+              onClick={() => void persistTemplate()}
             >
-              Save template
+              {templateBusy ? 'Saving …' : 'Save template'}
             </button>
             <button
               className="quiet-button"
-              disabled={live}
-              onClick={() => {
-                localStorage.removeItem(settingsKey);
-                setSettings({ ...DEFAULT_SETTINGS });
-                setNotice('Settings reset and saved template removed.');
-              }}
+              disabled={live || templateBusy}
+              onClick={() => void persistTemplate(true)}
             >
               Reset
             </button>

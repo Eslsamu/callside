@@ -43,6 +43,14 @@ Prefer shared browser-tab audio where available. Otherwise, expose a monitor/loo
 
 ## Common issues
 
+### Transcription reports `string_above_max_length`
+
+Upgrade to **0.3.2** or later and restart recording. Earlier versions copied the first 2,000 characters of reference material into the transcription prompt, which has a separate model-specific length limit. The reference limit shown in Settings applies to task generation. Current builds keep reference material out of transcription requests and still send it in full with suggestion requests. You do not need to shorten a reference that fits the displayed limit or add API credits to address this error.
+
+### A saved template disappears after restarting the desktop app
+
+Upgrade to **0.3.2** or later. Earlier desktop builds used browser storage tied to a local server address that changes on restart. Copy any custom instructions and reference material out of the old window before quitting, paste them into the new build, and click **Save template** once. The confirmation appears beside the button. New desktop templates load automatically after restarts and release updates; **Reset** removes them. Browser templates remain scoped to the browser and server address used when saving.
+
 | Symptom                                        | What to check                                                                                                                                            |
 | ---------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Demo works; a real call fails immediately      | Add a valid Platform API key and verify the API project has model access and billing configured.                                                         |

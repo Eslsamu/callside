@@ -12,7 +12,7 @@ npm run check
 
 The build performs TypeScript checking for the UI and server. Unit/integration tests exercise application behavior without a paid provider connection. Playwright runs a headless Chromium instance against a separate local development server using an empty provider key.
 
-The suite contains **72 unit/integration tests** and **10 browser tests**. These counts describe the checks in this repository; hardware and real provider acceptance are separate below.
+The suite includes unit/integration tests and browser tests; hardware and real provider acceptance are separate below.
 
 Browser checks use the explicit demo fixture to cover transcript rendering, manually requested suggestions, keyboard triggering, automatic hints, configuration, GPT-6 model/reasoning/Fast settings, and exports. Demo tests guard against accidental use of real capture devices. The CI workflow does not receive an OpenAI key.
 
@@ -28,7 +28,7 @@ Background tests cover voice reference reuse, mixed-speaker turn splitting, over
 npm run test:desktop
 ```
 
-This separate check builds the production application and starts a hidden Electron window with an isolated temporary profile. It verifies the production shell, preload bridge, IPC, demo transcript, answer event, and always-on-top control. It does not use real audio, call OpenAI, or register actual global keyboard shortcuts. The test sends the same IPC event that the native shortcut handler would send, then closes the app and removes its temporary profile.
+This separate check builds the production application and starts a hidden Electron window with an isolated temporary profile. It verifies the production shell, preload bridge, IPC, demo transcript, answer event, and always-on-top control. It saves a long synthetic template, checks the inline confirmation, restarts the app to verify restoration across different local server ports, resets it, and restarts again to verify removal. It does not use real audio, call OpenAI, or register actual global keyboard shortcuts. The test sends the same IPC event that the native shortcut handler would send, then closes the app and removes its temporary profile.
 
 Passing this check confirms the desktop integration under the tested environment. Actual OS shortcut registration, microphone permissions, and system audio routing still require the real-audio acceptance checks below.
 
@@ -63,3 +63,5 @@ The initial repository does not claim real-audio or cross-platform hardware cert
 ## Tasks and reference context
 
 Task tests cover full reference preservation, stable cache prefixes across manual/automatic modes and changing commands, exact-default migration, custom prompt/budget preservation, and the shared reference size limit. Provider mocks verify explicit caching request shape, omitted output cap in model-default mode, and usage reporting. Browser tests exercise the Workshop preset, long-reference save/reload, F8 before speech, oversized paste validation without truncation, reference-only export, and microphone-triggered automatic checks. All model results and usage counts are synthetic. Actual model quality, latency, and cache reuse require a user-authorized API session with representative course material.
+
+Transcription regressions verify that long references stay out of both audio-source configurations and that legacy prompt fields are discarded before upstream setup. Provider length errors receive specific advice without exposing raw provider error text. Template-storage tests cover long references, restart restoration, credential/session-state exclusion, owner-only permissions, failed-write preservation, corrupt-file handling, and removal. Browser checks also verify visible save success and failure feedback.

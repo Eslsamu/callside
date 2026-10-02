@@ -2,7 +2,7 @@
 
 ## Callside assets
 
-`callside-demo.png` is a screenshot of this repository's running local application, captured in headless Chromium with the explicit synthetic demo and a completed demo answer. It contains no real call audio, customer transcript, API key, or account data. It demonstrates the UI; it does not establish real microphone, OS capture, or OpenAI performance.
+`callside-demo.png` is a screenshot of this repository's running local application, refreshed on October 2, 2026 in a hidden Electron window with the explicit synthetic demo and a completed demo answer. It contains no real call audio, customer transcript, API key, or account data. It demonstrates the UI; it does not establish real microphone, OS capture, or OpenAI performance.
 
 `desktop/icon.svg` is an original geometric Callside application icon: a mint signal point and symmetric radio arcs on the application's graphite background. It was authored directly as SVG and rendered to the 1024 × 1024 `desktop/icon.png` in headless Chromium. `public/icon.svg` is the matching browser icon. These Callside assets are covered by this repository's MIT license.
 

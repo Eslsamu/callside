@@ -9,6 +9,7 @@ const {
   safeStorage,
 } = require('electron');
 const { createKeyStore } = require('./key-store.cjs');
+const { createTemplateStore } = require('./template-store.cjs');
 const path = require('node:path');
 const { pathToFileURL } = require('node:url');
 const smokeTest = process.argv.includes('--smoke-test');
@@ -86,6 +87,13 @@ function createWindow() {
 }
 
 async function boot() {
+  const { DEFAULT_SETTINGS } = await import(
+    pathToFileURL(path.join(__dirname, '../dist-server/shared/defaults.js')).href
+  );
+  const templateStore = createTemplateStore(
+    path.join(app.getPath('userData'), 'template.json'),
+    DEFAULT_SETTINGS,
+  );
   const serverModule = await import(
     pathToFileURL(path.join(__dirname, '../dist-server/server/index.js')).href
   );
@@ -166,6 +174,19 @@ async function boot() {
   ipcMain.handle('callside:shortcut-status', (event) => {
     if (!trustedSender(event)) throw new Error('Invalid desktop request.');
     return shortcutStatus;
+  });
+
+  ipcMain.handle('callside:template-load', (event) => {
+    if (!trustedSender(event)) throw new Error('Invalid desktop request.');
+    return templateStore.load();
+  });
+  ipcMain.handle('callside:template-save', (event, settings) => {
+    if (!trustedSender(event)) throw new Error('Invalid desktop request.');
+    return templateStore.save(settings);
+  });
+  ipcMain.handle('callside:template-remove', (event) => {
+    if (!trustedSender(event)) throw new Error('Invalid desktop request.');
+    return templateStore.remove();
   });
 
   shortcutStatus = ['F8', 'CommandOrControl+Shift+Space'].map((accelerator) => ({

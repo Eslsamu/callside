@@ -1,20 +1,38 @@
-# Callside
+# Callside: free, open-source Cluely alternative
 
-A small, local call copilot. See what is being said, ask a question, or press one key for a response you can use in the conversation.
+**Live AI assistance for meetings, sales calls, interviews, and workshops. No typing required during the conversation.**
 
-Callside listens to your microphone and the call audio you choose to share. OpenAI transcribes the audio and streams suggestions into a separate panel. You control the model, instructions, background context, and when help appears. The interface and repository documentation are in English.
+Callside is an MIT-licensed desktop call copilot. It transcribes microphone and call audio, uses your task instructions and reference material, and streams contextual suggestions. Press **F8**, click **Help now**, or enable **Automatic hints** so the model decides when to offer help. Questions and commands are optional.
 
-![Callside displaying a clearly marked demo transcript and a suggested response](docs/assets/callside-demo.png)
+**The software is free. OpenAI API usage is paid separately through your own API account.** There is no Callside subscription, license fee, or account requirement. Live cloud transcription, background speaker attribution, and generated suggestions incur provider charges. The built-in demo is free and needs no API key.
 
-## Try local transcription without an API key
+[Quick start](#quick-start) · [Compare alternatives](docs/ALTERNATIVES.md) · [Contributing](CONTRIBUTING.md) · [Roadmap](docs/ROADMAP.md) · [MIT license](LICENSE)
 
-Run `npm run local:test` for a microphone test with local Whisper, live drafts, and approximate latency measurements. See [the setup and measurement guide](docs/local-transcription-test.md). The first launch downloads a model; speech processing stays on your computer.
+![Callside demo showing a live transcript, contextual suggestion, and the Help now keyboard shortcut](docs/assets/callside-demo.png)
+
+## How it works without typing
+
+1. **Before the call:** choose a task and model, add course notes, product facts, or other reference material, and select audio sources.
+2. **During the call:** Callside transcribes the conversation. Press **F8** or **Command/Ctrl+Shift+Space** for a contextual response, explanation, next step, or other configured output. You do not have to retype what someone said.
+3. **For automatic help:** enable **Automatic hints** and set a rule, such as “When a participant needs clarification, suggest a short explanation using the course notes.” Checks follow finalized speech segments and can return no suggestion.
+
+The model infers the current need from the available transcript and instructions. Automatic timing and answer quality are model-dependent. The desktop shortcuts work outside the Callside window when the operating system allows registration; the browser shortcut requires focus.
+
+## An alternative to Cluely, Final Round AI, and LockedIn AI
+
+If you are looking for a **free, open-source Cluely alternative**, Callside provides live transcription and contextual assistance with source code you can modify and an API key you control. It also covers the live conversation-assistance use case of tools such as **Final Round AI** and **LockedIn AI**, while allowing tasks for teaching, customer support, and sales.
+
+The [comparison guide](docs/ALTERNATIVES.md) links to those products' official documentation and explains the differences. Callside is an independent project; it does not claim feature parity, guaranteed latency, screen understanding, or invisibility during screen sharing.
+
+## Project status
+
+Early-stage software. The repository is initially private while being prepared for public release; the code is MIT-licensed. macOS Apple Silicon has been used for desktop testing. Windows and Linux packaging targets exist, but their capture paths need broader real-device testing. Build from source with the commands below; signed installers are not currently provided.
 
 ## What it does
 
 - Live transcript with separate labels for your microphone and the other side of the call.
 - Background speaker attribution for the call channel while live text and suggestions continue.
-- A response button, typed questions, and **F8** while Callside has focus.
+- **Help now** and **F8** use the current conversation without a typed question; an optional command field is available.
 - Desktop shortcuts **F8** and **⌘⇧Space** on macOS or **Ctrl+Shift+Space** on Windows/Linux, which also work while the desktop app is in the background when the OS allows registration.
 - Automatic hints: give the assistant a rule such as “suggest an answer whenever the customer asks a question.” The model can choose to stay quiet.
 - Configurable answer model, prompts, language, source labels, and meeting context.
@@ -23,9 +41,11 @@ Run `npm run local:test` for a microphone test with local Whisper, live drafts, 
 
 ## Run it
 
-Use **Node.js 22.12 or later** and npm. Clone or download this repository, then run:
+Use **Node.js 22.12 or later** and npm. While the repository is private, you need GitHub access to clone it.
 
 ```sh
+git clone https://github.com/Eslsamu/callside.git
+cd callside
 npm ci
 npm run dev
 ```
@@ -54,7 +74,7 @@ npm start
    In the desktop app, leave **Remember API key on this device** checked and click **Save API key** to reuse it after restarting. **Remove API key** clears the saved key and the current session key. Browser users can set `OPENAI_API_KEY` in a local `.env` file.
 3. Choose your model, prompts, context, microphone, and call audio.
 4. Let everyone know about transcription, then start the call and grant audio permissions.
-5. Press **F8**, click **Help now**, or enter a command. Enable **Automatic hints** for prompt-controlled assistance.
+5. Press **F8** or click **Help now**; no typed command is needed. Enable **Automatic hints** for prompt-controlled assistance.
 6. End the call and export the session as JSON or Markdown if needed.
 
 ## ChatGPT subscription or API key?
@@ -91,7 +111,7 @@ Reference material supports up to **100,000 characters**. The UI shows the count
 
 ### Workshop setup
 
-1. Open **Settings** and choose **Workshop** under **How your assistant should help**.
+1. Open **Settings** and choose **Workshop** under **Task configuration**.
 2. Paste the course notes into **Reference material**. Include section names, exercise identifiers, and official solutions where available.
 3. Choose **GPT-6.1 Sol**, **Low** reasoning, and **Model default** under **Output token limit**. Fast mode is optional and costs more.
 4. Click **Save template**, return to **Conversation**, and leave **Automatic hints** off for the first test.
@@ -116,7 +136,7 @@ The app and its server run locally. Selected audio and relevant transcript/conte
 - API keys are held in server memory and are not returned to the renderer. Desktop users can explicitly remember a key using OS-backed encryption in app data outside the repository. Browser/session-only keys are not persisted by the UI.
 - The server listens on loopback. Keep it local; this is not a multi-user hosted service.
 - Transcripts and suggestions are not automatically written to disk. Exported files contain the conversation, so choose where to save them carefully.
-- **Save template** explicitly saves settings, prompts, and context in browser storage on this device. It does not save API keys or transcripts. **Reset** removes that saved template. Settings may contain confidential context, so review them before saving.
+- **Save template** explicitly saves settings, prompts, and context on this device. Desktop templates use permanent app storage and survive restarts and release updates; browser mode uses browser storage. It does not save API keys or transcripts. **Reset** removes that saved template. Settings may contain confidential context, so review them before saving.
 - Stop capture when the call ends. Obtain the participants' agreement before transmitting their audio.
 
 See [security](SECURITY.md) for the threat model and reporting guidance.
@@ -138,7 +158,30 @@ npm run desktop:pack   # unpacked app for the current platform
 npm run desktop:dist   # installer/archive for the current platform
 ```
 
+### Numbered releases
+
+Desktop builds use the version in `package.json`. For example, version **0.3.2** is packaged into `release/v0.3.2/`. Installers and archives include the version, OS, and architecture in their filenames, such as `Callside-0.3.2-mac-arm64.dmg`.
+
+After successful packaging, `release/Latest` points to that build folder. On an Apple Silicon Mac, open `release/Latest/mac-arm64/Callside.app` in Finder. The shortcut follows the most recently completed build; older version folders remain available. Early builds in folders such as `live-help` or `workshop` are legacy copies.
+
+For the next release, increment the version before packaging:
+
+```sh
+npm version patch --no-git-tag-version  # 0.3.2 -> 0.3.3; use minor for a feature release
+npm run desktop:pack
+```
+
+This updates both package files and creates a new numbered build folder. Rebuilding the same version replaces that version's packaged app. See [release notes](CHANGELOG.md) for the changes in each version.
+
 Build distributable desktop packages on the target OS. Public macOS and Windows distribution also requires your own signing/notarization setup. No signing credentials or prebuilt signed installers are included.
+
+### Optional local transcription experiment
+
+Run `npm run local:test` for a separate microphone test with local Whisper and approximate latency measurements. See [the local setup guide](docs/local-transcription-test.md). It downloads a model on first use and processes speech locally. This experiment does not replace the full app's API-based call assistance.
+
+## Questions and contributions
+
+Use [Issues](https://github.com/Eslsamu/callside/issues) for reproducible bugs and feature proposals, and [Discussions](https://github.com/Eslsamu/callside/discussions) for setup questions and workflow ideas. New contributors can start with documentation, synthetic tests, or platform testing; no paid API account is required for the automated checks. See [CONTRIBUTING.md](CONTRIBUTING.md) and [the roadmap](docs/ROADMAP.md). Report security issues through [SECURITY.md](SECURITY.md).
 
 See [architecture and provider extensions](docs/ARCHITECTURE.md), the [API contract](docs/CONTRACT.md), and [contributing](CONTRIBUTING.md).
 

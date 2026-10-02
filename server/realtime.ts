@@ -25,7 +25,6 @@ export function transcriptionSession(config: RealtimeConfig) {
           turn_detection: null,
           transcription: {
             model: config.model,
-            ...(config.prompt ? { prompt: config.prompt } : {}),
             ...(config.language
               ? modern
                 ? { languages: [config.language] }
@@ -37,6 +36,30 @@ export function transcriptionSession(config: RealtimeConfig) {
       },
     },
   };
+}
+
+function transcriptionErrorMessage(code: string, param: unknown): string {
+  const prefix = `OpenAI transcription failed (${code}).`;
+  if (code === 'string_above_max_length') {
+    const promptFields = [
+      'session.audio.input.transcription.prompt',
+      'audio.input.transcription.prompt',
+      'session.input_audio_transcription.prompt',
+    ];
+    const field =
+      typeof param === 'string' && promptFields.includes(param)
+        ? 'the transcription prompt'
+        : 'a transcription configuration field';
+    return `${prefix} OpenAI rejected ${field} because it is too long. This is separate from the Reference material limit. Update Callside and restart recording; your reference material can stay unchanged.`;
+  }
+  if (code === 'invalid_api_key') return `${prefix} Check or replace your OpenAI API key.`;
+  if (code === 'insufficient_quota')
+    return `${prefix} Check the API project's available credits and usage limit.`;
+  if (code === 'rate_limit_exceeded')
+    return `${prefix} Too many requests. Wait briefly and restart recording.`;
+  if (code === 'model_not_found')
+    return `${prefix} Check access to the selected transcription model or choose another model.`;
+  return `${prefix} Check the transcription model and language settings, then restart recording.`;
 }
 
 export interface RealtimeProxyOptions {
@@ -157,15 +180,12 @@ export function attachRealtime(server: Server, options: RealtimeProxyOptions): (
             message.type === 'error' ||
             message.type === 'conversation.item.input_audio_transcription.failed'
           ) {
-            const error = message.error as { code?: unknown } | undefined;
+            const error = message.error as { code?: unknown; param?: unknown } | undefined;
             const code =
               typeof error?.code === 'string' && /^[\w-]{1,80}$/.test(error.code)
                 ? error.code
                 : 'transcription_error';
-            fail(
-              `OpenAI transcription failed (${code}). Check model access, API balance, and language.`,
-              code,
-            );
+            fail(transcriptionErrorMessage(code, error?.param), code);
           } else if (
             typeof message.type === 'string' &&
             [

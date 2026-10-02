@@ -1,17 +1,19 @@
 import { _electron as electron, expect } from '@playwright/test';
-import { mkdtemp, rm } from 'node:fs/promises';
+import { mkdtemp, readFile, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
 // This deliberately avoids the user's foreground, keys, devices, and real API access.
 const profile = await mkdtemp(join(tmpdir(), 'callside-smoke-'));
 const args = ['.', '--smoke-test', `--user-data-dir=${profile}`];
-const app = await electron.launch({
-  ...(process.env.CALLSIDE_EXECUTABLE
-    ? { executablePath: process.env.CALLSIDE_EXECUTABLE, args: args.slice(1) }
-    : { args }),
-  env: { ...process.env, OPENAI_API_KEY: '' },
-});
+const launch = () =>
+  electron.launch({
+    ...(process.env.CALLSIDE_EXECUTABLE
+      ? { executablePath: process.env.CALLSIDE_EXECUTABLE, args: args.slice(1) }
+      : { args }),
+    env: { ...process.env, OPENAI_API_KEY: '' },
+  });
+let app = await launch();
 try {
   const page = await app.firstWindow();
   const errors = [];
@@ -85,8 +87,47 @@ try {
   ).toBe(true);
   await page.evaluate(() => window.callsideDesktop.setAlwaysOnTop(false));
   expect(errors).toEqual([]);
+
+  await page.getByRole('button', { name: 'End demo', exact: true }).click();
+  await page.getByRole('button', { name: 'Settings', exact: true }).click();
+  const course = 'Synthetic course notes for the restart check. '.repeat(750);
+  await page.getByLabel('Reference material', { exact: true }).fill(course);
+  await page.getByRole('combobox', { name: 'Task model', exact: true }).selectOption('gpt-6.1-sol');
+  await page.getByRole('button', { name: 'Save template', exact: true }).click();
+  await expect(page.getByTestId('template-feedback')).toContainText('Template saved.');
+  await expect(page.getByTestId('template-feedback')).toBeInViewport();
+  if (process.env.CALLSIDE_SMOKE_TEMPLATE_SCREENSHOT)
+    await page
+      .locator('.settings-bottom')
+      .screenshot({ path: process.env.CALLSIDE_SMOKE_TEMPLATE_SCREENSHOT });
+  const saved = JSON.parse(await readFile(join(profile, 'template.json'), 'utf8'));
+  expect(saved.context).toBe(course);
+  expect(saved).not.toHaveProperty('apiKey');
+  expect(saved).not.toHaveProperty('transcript');
+  const firstUrl = page.url();
+  await app.close();
+
+  app = await launch();
+  const reopened = await app.firstWindow();
+  await reopened.getByRole('button', { name: 'Settings', exact: true }).click();
+  expect(reopened.url()).not.toBe(firstUrl);
+  await expect(reopened.getByLabel('Reference material', { exact: true })).toHaveValue(course);
+  await expect(reopened.getByRole('combobox', { name: 'Task model', exact: true })).toHaveValue(
+    'gpt-6.1-sol',
+  );
+  await expect(reopened.getByLabel('Task instructions', { exact: true })).toHaveValue(
+    /Participants may move between topics/,
+  );
+  await reopened.getByRole('button', { name: 'Reset', exact: true }).click();
+  await expect(reopened.getByTestId('template-feedback')).toContainText('saved template removed');
+  await app.close();
+
+  app = await launch();
+  const reset = await app.firstWindow();
+  await reset.getByRole('button', { name: 'Settings', exact: true }).click();
+  await expect(reset.getByLabel('Reference material', { exact: true })).toHaveValue('');
   console.log(
-    'Desktop smoke passed: hidden production window, preload IPC, demo, answer shortcut event, always-on-top.',
+    'Desktop smoke passed: hidden production window, preload IPC, demo, answer shortcut event, always-on-top, template save/restart/reset.',
   );
 } finally {
   await app.close();

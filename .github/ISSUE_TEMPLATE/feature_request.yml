@@ -1,0 +1,23 @@
+name: Feature proposal
+description: Describe a workflow Callside should support.
+labels: [enhancement]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem or workflow
+      description: What are you trying to do, and what gets in the way?
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed behavior
+      description: Include any alternatives you considered.
+    validations:
+      required: true
+  - type: textarea
+    id: tradeoffs
+    attributes:
+      label: Platform, cost, and privacy considerations
+      description: Note any new permissions, API usage, persisted data, or OS constraints.

@@ -636,17 +636,10 @@ nav {
   justify-content: center;
   height: 100%;
 }
-.answer-mark {
-  font-family: Georgia, serif;
-  font-size: 62px;
-  line-height: 0.85;
-  color: var(--accent);
-  margin-bottom: 12px;
-}
 .empty-answer h3 {
-  font-size: 29px;
-  line-height: 1.28;
-  letter-spacing: -1px;
+  font-size: 18px;
+  line-height: 1.4;
+  letter-spacing: -0.2px;
   font-weight: 450;
   text-wrap: balance;
 }
@@ -656,19 +649,6 @@ nav {
   color: var(--muted);
   margin-top: 18px;
   max-width: 285px;
-}
-.shortcut-demo {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  margin-top: 25px;
-  color: var(--muted);
-  font-size: 10px;
-}
-.shortcut-demo kbd {
-  color: #cfddd2;
-  border-color: #5a6b5f;
-  padding: 5px 9px;
 }
 .suggestion-meta {
   display: flex;
@@ -1013,7 +993,18 @@ nav {
   line-height: 1.7;
   color: var(--muted);
   max-width: 470px;
+}
+.template-copy {
+  min-width: 0;
+  flex: 1;
   margin-right: auto;
+}
+.settings-bottom .template-feedback {
+  margin-top: 8px;
+  color: var(--accent);
+}
+.settings-bottom .template-feedback.error {
+  color: #f6c8b5;
 }
 .settings-bottom button {
   flex-shrink: 0;
@@ -1089,9 +1080,6 @@ nav {
   }
   .suggestion-area {
     padding: 25px 24px 15px;
-  }
-  .empty-answer h3 {
-    font-size: 26px;
   }
   .auto-control {
     padding: 16px 20px;
@@ -1238,9 +1226,6 @@ nav {
     margin-left: 0;
     padding: 0 4px;
   }
-  .empty-answer h3 {
-    font-size: 28px;
-  }
   .answer-text {
     font-size: 23px;
   }
@@ -1250,9 +1235,6 @@ nav {
     flex-direction: column;
     gap: 4px;
     padding: 16px 0;
-  }
-  .page-footer > span:last-child {
-    display: none;
   }
   .settings-view {
     padding: 26px 20px;
@@ -1279,7 +1261,7 @@ nav {
     flex-wrap: wrap;
     gap: 12px;
   }
-  .settings-bottom p {
+  .settings-bottom .template-copy {
     width: 100%;
     max-width: none;
     flex-basis: 100%;

@@ -51,6 +51,28 @@ afterEach(() => {
 });
 
 describe('realtime audio transport', () => {
+  it.each(['mic', 'system'] as const)(
+    'keeps a long course reference out of the %s transcription configuration',
+    async (source) => {
+      vi.stubGlobal('window', { location: { href: 'http://127.0.0.1:1234/' } });
+      vi.stubGlobal('WebSocket', TestSocket);
+      const settings = {
+        ...DEFAULT_SETTINGS,
+        context: 'Course exercise and solution. '.repeat(1000),
+      };
+      const original = settings.context;
+      const pending = createRealtimeSink(settings, 'token', source, callbacks(), vi.fn());
+      const socket = TestSocket.latest;
+      socket.open();
+      expect(socket.sent).toEqual([
+        { type: 'configure', model: 'gpt-live-transcribe', language: '' },
+      ]);
+      socket.emit({ type: 'ready' });
+      await (await pending).stop();
+      expect(settings.context).toBe(original);
+    },
+  );
+
   it('configures first, waits for readiness, then drains the last committed transcription on stop', async () => {
     vi.stubGlobal('window', { location: { href: 'http://127.0.0.1:1234/' } });
     vi.stubGlobal('WebSocket', TestSocket);

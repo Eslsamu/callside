@@ -10,3 +10,9 @@ playwright-report/
 .DS_Store
 .impeccable/
 .local/
+
+# Local profiles, saved credentials, and template data
+openai-key.enc
+template.json
+*.pem
+*.key

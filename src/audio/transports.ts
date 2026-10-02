@@ -71,7 +71,6 @@ export async function createRealtimeSink(
           type: 'configure',
           model: settings.transcriptionModel,
           language: settings.language,
-          prompt: settings.context.slice(0, 2000),
         }),
       );
     socket.onmessage = (message) => {

@@ -19,5 +19,14 @@ contextBridge.exposeInMainWorld(
     getShortcutStatus() {
       return ipcRenderer.invoke('callside:shortcut-status');
     },
+    loadTemplate() {
+      return ipcRenderer.invoke('callside:template-load');
+    },
+    saveTemplate(settings) {
+      return ipcRenderer.invoke('callside:template-save', settings);
+    },
+    removeTemplate() {
+      return ipcRenderer.invoke('callside:template-remove');
+    },
   }),
 );

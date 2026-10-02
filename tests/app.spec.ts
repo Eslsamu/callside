@@ -429,6 +429,8 @@ test('edited prompts are used in answers and saved only when requested', async (
     page.getByRole('checkbox', { name: 'Transcribe microphone', exact: true }),
   ).toBeDisabled();
   await page.getByRole('button', { name: 'Save template', exact: true }).click();
+  await expect(page.getByTestId('template-feedback')).toContainText('Template saved.');
+  await expect(page.getByTestId('template-feedback')).toBeInViewport();
   await page.reload();
   await page.getByRole('button', { name: 'Settings', exact: true }).click();
   await expect(page.getByRole('textbox', { name: 'Reference material', exact: true })).toHaveValue(
@@ -439,6 +441,26 @@ test('edited prompts are used in answers and saved only when requested', async (
     '',
   );
   expect(await page.evaluate(() => localStorage.getItem('callside.settings.v1'))).toBeNull();
+  await expect(page.getByTestId('template-feedback')).toContainText('saved template removed');
+});
+
+test('a failed template save keeps edits and reports the problem beside the button', async ({
+  page,
+}) => {
+  await page.getByRole('button', { name: 'Settings', exact: true }).click();
+  await page.getByLabel('Reference material', { exact: true }).fill('Keep these course notes.');
+  await page.evaluate(() => {
+    Storage.prototype.setItem = () => {
+      throw new DOMException('Storage full', 'QuotaExceededError');
+    };
+  });
+  await page.getByRole('button', { name: 'Save template', exact: true }).click();
+  await expect(page.getByTestId('template-feedback')).toContainText('Could not save');
+  await expect(page.getByTestId('template-feedback')).toHaveAttribute('role', 'alert');
+  await expect(page.getByTestId('template-feedback')).toBeInViewport();
+  await expect(page.getByLabel('Reference material', { exact: true })).toHaveValue(
+    'Keep these course notes.',
+  );
 });
 
 test('exports contain the demo transcript and a new session clears it', async ({ page }) => {
