@@ -1,8 +1,10 @@
-# Callside: free, open-source Cluely alternative
+# Callside
 
 **Live AI assistance for meetings, sales calls, interviews, and workshops. No typing required during the conversation.**
 
 Callside is an MIT-licensed desktop call copilot. It transcribes microphone and call audio, uses your task instructions and reference material, and streams contextual suggestions. Press **F8**, click **Help now**, or enable **Automatic hints** so the model decides when to offer help. Questions and commands are optional.
+
+It is a free, open-source alternative to Cluely for live conversation assistance. See the [comparison section](#an-alternative-to-cluely-final-round-ai-and-lockedin-ai) for differences and limitations.
 
 **The software is free. OpenAI API usage is paid separately through your own API account.** There is no Callside subscription, license fee, or account requirement. Live cloud transcription, background speaker attribution, and generated suggestions incur provider charges. The built-in demo is free and needs no API key.
 
