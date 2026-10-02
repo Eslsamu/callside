@@ -16,5 +16,6 @@ export interface LocalTranscription {
 
 export interface LocalEngine {
   model: string;
+  details?: Record<string, string | number | boolean>;
   transcribe(audio: Uint8Array, language: string, signal: AbortSignal): Promise<LocalTranscription>;
 }

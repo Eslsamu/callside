@@ -1,5 +1,141 @@
 import { expect, test, type Page } from '@playwright/test';
 import { readFile } from 'node:fs/promises';
+import { encodeWav } from '../src/audio/dsp';
+
+test('comparison uploads once, renders both local models, and exports the report', async ({
+  page,
+}) => {
+  await page.route('**/api/comparison/status', (route) =>
+    route.fulfill({
+      json: {
+        ready: true,
+        engines: [
+          { id: 'whisper', model: 'test-whisper' },
+          { id: 'cohere', model: 'test-cohere' },
+        ],
+      },
+    }),
+  );
+  const metrics = {
+    audioMs: 1000,
+    wallMs: 1300,
+    processingMs: 300,
+    processingToAudioRatio: 0.3,
+    firstTextMs: 900,
+    medianFinalDelayMs: 600,
+    p95FinalDelayMs: 600,
+    maxQueueMs: 0,
+    drainMs: 300,
+    requests: 1,
+    finalTurns: 1,
+    wer: 0,
+    wordErrors: 0,
+    referenceWords: 2,
+  };
+  const report = {
+    version: 1,
+    createdAt: '2026-10-02T00:00:00.000Z',
+    language: 'en',
+    audioSha256: 'fixture',
+    audioMs: 1000,
+    reference: 'Test phrase',
+    protocol: 'Synthetic browser test',
+    hardware: {},
+    results: ['whisper', 'cohere'].map((engine) => ({
+      engine,
+      model: `test-${engine}`,
+      transcript: 'Test phrase',
+      metrics,
+      measurements: [],
+    })),
+  };
+  let payload: Record<string, any> | undefined;
+  await page.route('**/api/comparison/run', (route) => {
+    payload = route.request().postDataJSON();
+    const events = ['whisper', 'cohere'].flatMap((engine) => [
+      { type: 'start', engine, model: `test-${engine}` },
+      { type: 'turn', engine, id: 'turn-1', text: 'Test phrase', final: true },
+      { type: 'done', engine, metrics },
+    ]);
+    return route.fulfill({
+      contentType: 'text/event-stream',
+      body: [...events, { type: 'complete', report }]
+        .map((event) => `data: ${JSON.stringify(event)}\n\n`)
+        .join(''),
+    });
+  });
+  await page.goto('/local-compare');
+  await expect(page.getByRole('button', { name: 'Run comparison', exact: true })).toBeDisabled();
+  await page.getByLabel('Upload WAV file').setInputFiles({
+    name: 'test.wav',
+    mimeType: 'audio/wav',
+    buffer: Buffer.from(encodeWav(new Int16Array(16000), 16000)),
+  });
+  await page.getByRole('combobox', { name: 'Language', exact: true }).selectOption('en');
+  await page.getByLabel('Expected transcript', { exact: false }).fill('Test phrase');
+  await page.getByRole('button', { name: 'Run comparison', exact: true }).click();
+  await expect(page.getByRole('status')).toContainText('Comparison complete');
+  await expect(page.getByRole('log')).toHaveCount(2);
+  await expect(page.getByRole('log', { name: 'Cohere transcript', exact: true })).toContainText(
+    'Test phrase',
+  );
+  await expect(page.getByRole('log', { name: 'Whisper transcript', exact: true })).toContainText(
+    'Test phrase',
+  );
+  expect(payload?.language).toBe('en');
+  expect(payload?.reference).toBe('Test phrase');
+  expect(Buffer.from(payload?.audio, 'base64').subarray(0, 4).toString()).toBe('RIFF');
+  const downloaded = page.waitForEvent('download');
+  await page.getByRole('button', { name: 'Download report', exact: true }).click();
+  const download = await downloaded;
+  expect(download.suggestedFilename()).toBe('callside-cohere-whisper-2026-10-02.json');
+  expect(JSON.parse(await readFile((await download.path())!, 'utf8'))).toEqual(report);
+  await page.setViewportSize({ width: 390, height: 844 });
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(
+    true,
+  );
+  await page.route('**/api/comparison/run', (route) =>
+    route.fulfill({
+      contentType: 'text/event-stream',
+      body: 'data: {"type":"start","engine":"whisper","model":"test-whisper"}\n\n',
+    }),
+  );
+  await page.getByRole('button', { name: 'Run comparison', exact: true }).click();
+  await expect(page.getByRole('alert')).toContainText('connection was interrupted');
+  await expect(page.getByRole('button', { name: 'Download report', exact: true })).toBeDisabled();
+});
+
+test('comparison allows cancelling a pending microphone permission without retaining a late stream', async ({
+  page,
+}) => {
+  await page.route('**/api/comparison/status', (route) =>
+    route.fulfill({ json: { ready: true, engines: [] } }),
+  );
+  await page.addInitScript(() => {
+    Object.defineProperty(navigator.mediaDevices, 'getUserMedia', {
+      configurable: true,
+      value: () =>
+        new Promise<MediaStream>((resolve) => {
+          (window as any).__grantComparisonMic = () => {
+            const context = new AudioContext();
+            const destination = context.createMediaStreamDestination();
+            (window as any).__comparisonStream = destination.stream;
+            resolve(destination.stream);
+            void context.close();
+          };
+        }),
+    });
+  });
+  await page.goto('/local-compare');
+  await page.getByRole('button', { name: 'Record audio', exact: true }).click();
+  await expect(page.getByRole('button', { name: 'Cancel microphone', exact: true })).toBeVisible();
+  await page.getByRole('button', { name: 'Cancel microphone', exact: true }).click();
+  await page.evaluate(() => (window as any).__grantComparisonMic());
+  await expect
+    .poll(() => page.evaluate(() => (window as any).__comparisonStream.getTracks()[0].readyState))
+    .toBe('ended');
+  await expect(page.getByRole('status')).toContainText('Cancelled. Microphone is off.');
+});
 
 test('local test keeps Stop available if input enumeration fails after capture starts', async ({
   page,

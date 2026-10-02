@@ -89,7 +89,7 @@ export class LocalSpeechPipeline {
     } else this.queue.push(job);
     if (this.queue.filter((item) => item.final).length > 4) {
       this.fail(
-        'Whisper cannot keep up on this device. Recording stopped. Try a smaller local model.',
+        'The local model cannot keep up on this device. The test stopped. Try a smaller local model.',
       );
       return;
     }

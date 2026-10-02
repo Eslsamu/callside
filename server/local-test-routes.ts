@@ -23,11 +23,11 @@ const request = z.object({
 });
 
 /** Strict canonical PCM16 mono 16 kHz, at most 13 seconds per local request. */
-export function decodeLocalWav(encoded: string): Buffer {
+export function decodeLocalWav(encoded: string, maxSeconds = 13): Buffer {
   const b = Buffer.from(encoded, 'base64');
   if (
     b.length < 3244 ||
-    b.length > 416044 ||
+    b.length > 44 + 32000 * maxSeconds ||
     b.toString('base64') !== encoded ||
     b.toString('ascii', 0, 4) !== 'RIFF' ||
     b.toString('ascii', 8, 16) !== 'WAVEfmt ' ||
@@ -43,7 +43,7 @@ export function decodeLocalWav(encoded: string): Buffer {
     b.readUInt32LE(40) !== b.length - 44 ||
     (b.length - 44) % 2 !== 0
   )
-    throw new Error('Expected PCM16 mono 16 kHz WAV, up to 13 seconds.');
+    throw new Error(`Expected PCM16 mono 16 kHz WAV, up to ${maxSeconds} seconds.`);
   return b;
 }
 

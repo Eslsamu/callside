@@ -22,7 +22,9 @@
     "check": "npm run build && npm test && npm run test:e2e",
     "test:desktop": "npm run build && node tests/desktop-smoke.mjs",
     "format": "prettier --write .",
-    "format:check": "prettier --check ."
+    "format:check": "prettier --check .",
+    "local:compare": "tsx server/local-compare.ts",
+    "local:setup": "node scripts/cohere-setup.mjs"
   },
   "dependencies": {
     "@fontsource-variable/dm-sans": "^5.3.0",

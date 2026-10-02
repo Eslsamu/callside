@@ -17,3 +17,7 @@ chatgpt-auth.enc
 template.json
 *.pem
 *.key
+
+# Local Python runtime caches
+__pycache__/
+*.pyc

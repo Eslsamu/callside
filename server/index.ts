@@ -19,6 +19,7 @@ import {
   type AiProvider,
 } from './provider.js';
 import { attachRealtime, type RealtimeFactory } from './realtime.js';
+import { attachComparison, type ComparisonEngines } from './comparison.js';
 import { attachLocalTest } from './local-test-routes.js';
 import type { LocalEngine } from '../shared/local-test.js';
 
@@ -34,6 +35,7 @@ export interface ServerOptions {
   providerFactory?: (apiKey: string) => AiProvider;
   realtimeFactory?: RealtimeFactory;
   localEngine?: LocalEngine;
+  comparisonEngines?: ComparisonEngines;
   keyStore?: {
     load(): Promise<string | null>;
     save(key: string): Promise<void>;
@@ -158,6 +160,7 @@ export async function startServer(options: ServerOptions = {}): Promise<RunningS
   });
   app.use('/api', express.json({ limit: '7mb', strict: true }));
   attachLocalTest(app, options.localEngine);
+  const closeComparison = attachComparison(app, options.comparisonEngines);
   app.get('/api/chatgpt', (_req, res) =>
     res.json(
       chatgpt?.status() ?? {
@@ -469,6 +472,7 @@ export async function startServer(options: ServerOptions = {}): Promise<RunningS
       for (const controller of active) controller.abort();
       chatgpt?.cancel();
       detachRealtime();
+      closeComparison();
       await vite?.close();
       const closing = new Promise<void>((resolveClose) => server.close(() => resolveClose()));
       server.closeAllConnections();

@@ -1,0 +1,223 @@
+{
+  "version": 1,
+  "createdAt": "2026-10-02T07:35:27.156Z",
+  "language": "en",
+  "audioSha256": "04751bef210da249a12fea6ef095cf26af38e6c81eeeb2b8b2679f3afdc59e28",
+  "audioMs": 6305.625,
+  "reference": "For the next workshop, please open exercise seven. We will compare two options before choosing a solution.",
+  "protocol": "Same PCM16 mono 16 kHz recording; separate warmed, real-time paced replays in alternating order; 50 ms frames; energy VAD; first draft after 1.2 s, updates no sooner than 0.8 s; 0.5 s silence finalizes; 12 s maximum turn; stale drafts coalesced, finals retained; no diarization or postprocessing. Timing is approximate and includes buffering and queueing, but not physical microphone or browser paint latency. Model-specific adaptive draft coalescing can produce different intermediate snapshots.",
+  "hardware": {
+    "platform": "darwin",
+    "arch": "arm64",
+    "cpu": "Apple M1 Pro",
+    "memoryBytes": 17179869184,
+    "node": "v26.8.1"
+  },
+  "results": [
+    {
+      "engine": "whisper",
+      "model": "large-v3-turbo-q5_0",
+      "transcript": "For the next workshop, please open exercise 7. We will compare two options before choosing a solution.",
+      "metrics": {
+        "audioMs": 6305.625,
+        "wallMs": 7783.088499999998,
+        "processingMs": 6580.73620900001,
+        "processingToAudioRatio": 1.0436294909703654,
+        "firstTextMs": 2170.018000000011,
+        "medianFinalDelayMs": 1481.1637499999924,
+        "p95FinalDelayMs": 1481.1637499999924,
+        "maxQueueMs": 514.6146670000016,
+        "drainMs": 1477.2837919999874,
+        "requests": 7,
+        "finalTurns": 1,
+        "wer": 0.058823529411764705,
+        "wordErrors": 1,
+        "referenceWords": 17
+      },
+      "measurements": [
+        {
+          "turnId": "turn-1",
+          "final": false,
+          "audioMs": 1200,
+          "processingMs": 969.7024999999994,
+          "requestMs": 969.763042000006,
+          "queueMs": 0,
+          "speechToTextMs": 970.0826670000097,
+          "firstTextMs": 2170.018000000011
+        },
+        {
+          "turnId": "turn-1",
+          "final": false,
+          "audioMs": 2150,
+          "processingMs": 912.8318340000114,
+          "requestMs": 912.8868749999965,
+          "queueMs": 0,
+          "speechToTextMs": 932.8699999999953,
+          "firstTextMs": 2170.018000000011
+        },
+        {
+          "turnId": "turn-1",
+          "final": false,
+          "audioMs": 3050,
+          "processingMs": 905.9087089999957,
+          "requestMs": 905.9535000000033,
+          "queueMs": 0,
+          "speechToTextMs": 938.8851250000007,
+          "firstTextMs": 2170.018000000011
+        },
+        {
+          "turnId": "turn-1",
+          "final": false,
+          "audioMs": 3950,
+          "processingMs": 936.094041999997,
+          "requestMs": 936.1271669999987,
+          "queueMs": 0,
+          "speechToTextMs": 975.4544580000074,
+          "firstTextMs": 2170.018000000011
+        },
+        {
+          "turnId": "turn-1",
+          "final": false,
+          "audioMs": 4900,
+          "processingMs": 939.8202910000109,
+          "requestMs": 939.8977919999888,
+          "queueMs": 0,
+          "speechToTextMs": 965.21154199999,
+          "firstTextMs": 2170.018000000011
+        },
+        {
+          "turnId": "turn-1",
+          "final": false,
+          "audioMs": 5850,
+          "processingMs": 954.7374580000032,
+          "requestMs": 954.8056249999936,
+          "queueMs": 0,
+          "speechToTextMs": 969.8769999999931,
+          "firstTextMs": 2170.018000000011
+        },
+        {
+          "turnId": "turn-1",
+          "final": true,
+          "audioMs": 6305.625,
+          "processingMs": 961.641374999992,
+          "requestMs": 961.650999999998,
+          "queueMs": 514.6146670000016,
+          "speechToTextMs": 1481.1637499999924,
+          "firstTextMs": 2170.018000000011
+        }
+      ],
+      "details": {
+        "runtime": "whisper.cpp / Metal on supported macOS",
+        "modelRevision": "5359861c739e955e79d9a303bcbc70fb988958b1",
+        "quantization": "Q5_0",
+        "decoding": "greedy, temperature 0, no fallback"
+      }
+    },
+    {
+      "engine": "cohere",
+      "model": "Cohere Transcribe 03-2026 (MLX 4-bit)",
+      "transcript": "For the next workshop, please open exercise 7. We will compare two options before choosing a solution.",
+      "metrics": {
+        "audioMs": 6305.625,
+        "wallMs": 6596.982499999998,
+        "processingMs": 3087.5774150000216,
+        "processingToAudioRatio": 0.48965446169095395,
+        "firstTextMs": 2729.720333999998,
+        "medianFinalDelayMs": 297.2038339999999,
+        "p95FinalDelayMs": 297.2038339999999,
+        "maxQueueMs": 2.8731249999982538,
+        "drainMs": 291.60258299999987,
+        "requests": 7,
+        "finalTurns": 1,
+        "wer": 0.058823529411764705,
+        "wordErrors": 1,
+        "referenceWords": 17
+      },
+      "measurements": [
+        {
+          "turnId": "turn-1",
+          "final": false,
+          "audioMs": 1200,
+          "processingMs": 1528.5085410000029,
+          "requestMs": 1528.5854589999944,
+          "queueMs": 0,
+          "speechToTextMs": 1528.825291999994,
+          "firstTextMs": 2729.720333999998
+        },
+        {
+          "turnId": "turn-1",
+          "final": false,
+          "audioMs": 2700,
+          "processingMs": 197.1863330000051,
+          "requestMs": 197.2593329999945,
+          "queueMs": 0,
+          "speechToTextMs": 228.05320799999754,
+          "firstTextMs": 2729.720333999998
+        },
+        {
+          "turnId": "turn-1",
+          "final": false,
+          "audioMs": 3550,
+          "processingMs": 201.4081670000014,
+          "requestMs": 201.4987919999985,
+          "queueMs": 0,
+          "speechToTextMs": 201.61475000000792,
+          "firstTextMs": 2729.720333999998
+        },
+        {
+          "turnId": "turn-1",
+          "final": false,
+          "audioMs": 4350,
+          "processingMs": 284.63295800000196,
+          "requestMs": 285.340916000001,
+          "queueMs": 0,
+          "speechToTextMs": 286.3119580000057,
+          "firstTextMs": 2729.720333999998
+        },
+        {
+          "turnId": "turn-1",
+          "final": false,
+          "audioMs": 5200,
+          "processingMs": 285.03804100000707,
+          "requestMs": 285.08150000000023,
+          "queueMs": 0,
+          "speechToTextMs": 285.17279199999757,
+          "firstTextMs": 2729.720333999998
+        },
+        {
+          "turnId": "turn-1",
+          "final": false,
+          "audioMs": 6000,
+          "processingMs": 302.2529579999973,
+          "requestMs": 302.49499999999534,
+          "queueMs": 0,
+          "speechToTextMs": 302.6191669999971,
+          "firstTextMs": 2729.720333999998
+        },
+        {
+          "turnId": "turn-1",
+          "final": true,
+          "audioMs": 6305.625,
+          "processingMs": 288.55041700000584,
+          "requestMs": 288.55574999999953,
+          "queueMs": 2.8731249999982538,
+          "speechToTextMs": 297.2038339999999,
+          "firstTextMs": 2729.720333999998
+        }
+      ],
+      "details": {
+        "runtime": "mlx-audio 0.5.7",
+        "modelDirectory": "cohere-transcribe-mlx-4bit",
+        "model": "lyzgeorge/cohere-transcribe-03-2026-mlx-4bit",
+        "revision": "f2f6d89b1a300c51f48ae1ecb8523dbb58636cb0",
+        "baseModel": "CohereLabs/cohere-transcribe-03-2026",
+        "baseRevision": "b1eacc2686a3d08ceaae5f24a88b1d519620bc09",
+        "runtimeRevision": "94c7716212b2228f178d2f9c7619a591fd1b0b78",
+        "mlx": "0.32.3",
+        "quantization": "4-bit affine, group size 64; remaining tensors BF16",
+        "weightsSha256": "1032930782400476e56d4b852a750920ab49bd048f32eb68aeef5f651077e0a6",
+        "lastInferenceMlxPeakMemoryBytes": 1679562127
+      }
+    }
+  ]
+}

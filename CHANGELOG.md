@@ -1,5 +1,10 @@
 # Changelog
 
+## Unreleased
+
+- Add a local Cohere-versus-Whisper comparison page with record-once replay, transcript comparison, latency, optional word-error scoring, cancellation, and report downloads.
+- Add pinned Apple Silicon MLX setup and model provenance, plus synthetic English/German smoke measurements. The default call transcription provider is unchanged.
+
 ## 0.4.0 - 2026-10-02
 
 - Add desktop ChatGPT sign-in for manual and automatic contextual suggestions using plan usage instead of API credit.

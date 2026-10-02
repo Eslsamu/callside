@@ -199,3 +199,7 @@ See [architecture and provider extensions](docs/ARCHITECTURE.md), the [API contr
 ## License
 
 [MIT](LICENSE). Bundled fonts and interface icons retain their own licenses; see [asset attribution](docs/assets/README.md). OpenAI and any other services you connect have their own terms and usage charges. Callside is an independent project.
+
+## Compare local transcription models
+
+A separate [Cohere-versus-Whisper test](docs/local-comparison.md) records once and replays the same audio through both local models, with transcript, latency, and optional word-error comparisons. On Apple Silicon, run `npm run local:setup` followed by `npm run local:compare`. It uses no API credit and does not change the main app's transcription provider.
