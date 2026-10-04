@@ -7,6 +7,8 @@ import { fileURLToPath } from 'node:url';
 export default async function afterAllArtifactBuild({ outDir }) {
   const releaseRoot = fileURLToPath(new URL('../release/', import.meta.url));
   const destination = resolve(outDir);
+  // Preview builds never move the latest-release shortcut.
+  if (dirname(destination) !== resolve(releaseRoot) || !/^v\d+\.\d+\.\d+(?:-[\w.-]+)?$/.test(destination.split(/[\\/]/).at(-1))) return [];
   const latest = join(releaseRoot, 'Latest');
   if (destination === resolve(releaseRoot) || destination === latest)
     throw new Error('Use a separate version folder for release output.');

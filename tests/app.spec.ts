@@ -2,6 +2,71 @@ import { expect, test, type Page } from '@playwright/test';
 import { readFile } from 'node:fs/promises';
 import { encodeWav } from '../src/audio/dsp';
 
+test('local transcription is the default and runs without an API key or cloud audio', async ({
+  page,
+}) => {
+  await page.route('**/api/bootstrap', (route) =>
+    route.fulfill({ json: { token: 'test', hasApiKey: false, models: [] } }),
+  );
+  await page.route('**/api/local/prepare', (route) =>
+    route.fulfill({ json: { ready: true, model: 'fixture' } }),
+  );
+  await page.route('**/api/local/transcribe', (route) =>
+    route.fulfill({ json: { text: 'A locally transcribed sentence.', processingMs: 12 } }),
+  );
+  await page.route('**/api/local-speakers/start', (route) =>
+    route.fulfill({ json: { session: 'fixture' } }),
+  );
+  let speakerBatches = 0;
+  await page.route('**/api/local-speakers/audio', (route) => {
+    speakerBatches++;
+    return route.fulfill({
+      json: { from: 0, through: 60, segments: [{ start: 0, end: 60, speaker: 0 }] },
+    });
+  });
+  const cloudAudio: string[] = [];
+  page.on('request', (request) => {
+    if (/\/api\/(realtime|diarize)/.test(request.url())) cloudAudio.push(request.url());
+  });
+  await page.addInitScript(() => {
+    localStorage.setItem('callside.settings.v1', JSON.stringify({ captureMic: false }));
+    Object.defineProperty(navigator.mediaDevices, 'getDisplayMedia', {
+      configurable: true,
+      value: async () => {
+        const c = new AudioContext(),
+          o = c.createOscillator(),
+          g = c.createGain(),
+          d = c.createMediaStreamDestination();
+        g.gain.value = 0.2;
+        o.connect(g).connect(d);
+        o.start();
+        await c.resume();
+        return d.stream;
+      },
+    });
+  });
+  await page.goto('/');
+  await page.getByRole('button', { name: 'Settings', exact: true }).click();
+  await expect(page.getByLabel('Transcription processing')).toHaveValue('local');
+  await expect(page.getByLabel('Speaker labeling')).toHaveValue('local');
+  await expect(
+    page.getByLabel('Speaker labeling').locator('option[value="openai"]'),
+  ).toHaveAttribute('disabled', '');
+  await page.getByRole('button', { name: 'Use local audio + ChatGPT subscription' }).click();
+
+  await page.getByLabel('Transcription processing').scrollIntoViewIfNeeded();
+  await page.screenshot({ path: '.local/local-settings-qa.png' });
+  await page.getByRole('button', { name: 'Conversation', exact: true }).click();
+  await page.getByLabel('Everyone knows about transcription.').check();
+  await page.getByRole('button', { name: 'Start call', exact: true }).click();
+  await expect(page.getByTestId('transcript-entry').first()).toContainText(
+    'A locally transcribed sentence.',
+  );
+  expect(cloudAudio).toEqual([]);
+  await expect.poll(() => speakerBatches).toBeGreaterThan(0);
+  await page.getByRole('button', { name: 'End call', exact: true }).click();
+});
+
 test('comparison uploads once, renders both local models, and exports the report', async ({
   page,
 }) => {
@@ -88,7 +153,7 @@ test('comparison uploads once, renders both local models, and exports the report
   const downloaded = page.waitForEvent('download');
   await page.getByRole('button', { name: 'Download report', exact: true }).click();
   const download = await downloaded;
-  expect(download.suggestedFilename()).toBe('callside-cohere-whisper-2026-10-02.json');
+  expect(download.suggestedFilename()).toBe('callside-transcription-benchmark-2026-10-02.json');
   expect(JSON.parse(await readFile((await download.path())!, 'utf8'))).toEqual(report);
   await page.setViewportSize({ width: 390, height: 844 });
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(
@@ -295,13 +360,21 @@ test('live two-channel capture filters microphone echoes in the transcript and e
   });
   await page.addInitScript(() => {
     const gains: GainNode[] = [];
+    localStorage.setItem(
+      'callside.settings.v1',
+      JSON.stringify({
+        transcriptionProvider: 'openai',
+        backgroundSpeakers: false,
+        diarizationProvider: 'off',
+      }),
+    );
     (window as unknown as { __echoGains: GainNode[] }).__echoGains = gains;
     const syntheticStream = async () => {
       const context = new AudioContext();
       const oscillator = context.createOscillator(),
         gain = context.createGain();
       const destination = context.createMediaStreamDestination();
-      gain.gain.value = 0.25;
+      gain.gain.value = 0;
       oscillator.connect(gain).connect(destination);
       oscillator.start();
       await context.resume();
@@ -321,6 +394,11 @@ test('live two-channel capture filters microphone echoes in the transcript and e
   await page.getByLabel('Everyone knows about transcription.').check();
   await page.getByRole('button', { name: 'Start call', exact: true }).click();
   await expect(page.getByRole('button', { name: 'End call', exact: true })).toBeVisible();
+  // Start both sources together after capture setup, independent of device startup time.
+  await page.evaluate(() => {
+    for (const gain of (window as unknown as { __echoGains: GainNode[] }).__echoGains)
+      gain.gain.value = 0.25;
+  });
   await expect
     .poll(async () =>
       page.getByRole('meter', { name: 'Microphone level' }).getAttribute('aria-valuenow'),
@@ -430,6 +508,7 @@ test('background attribution updates live turns and answer context without dupli
       'callside.settings.v1',
       JSON.stringify({
         captureMic: false,
+        transcriptionProvider: 'openai',
         backgroundSpeakers: true,
         diarizationChunkSeconds: 4,
         autoCooldownMs: 3000,
@@ -703,7 +782,13 @@ test('synthetic audio passes through the actual worklet and stopping releases th
     const errors: string[] = [];
     let ended = false;
     const handle = await startCapture(
-      { ...DEFAULT_SETTINGS, captureMic: true, captureSystem: false },
+      {
+        ...DEFAULT_SETTINGS,
+        transcriptionProvider: 'openai',
+        backgroundSpeakers: false,
+        captureMic: true,
+        captureSystem: false,
+      },
       bootstrap.token,
       {
         onTranscript: (entry: { text: string; final: boolean }) => entries.push(entry),
@@ -953,4 +1038,661 @@ test('ChatGPT sign-in selects plan billing, loads models, and preserves it in te
   await page.getByRole('button', { name: 'Settings', exact: true }).click();
   await page.getByRole('button', { name: 'Sign out of ChatGPT', exact: true }).click();
   await expect(page.getByLabel('Pay for suggestions with')).toHaveValue('chatgpt');
+});
+
+test('cloud comparison requires keys and sends only explicitly selected providers', async ({
+  page,
+}) => {
+  await page.route('**/api/comparison/status', (route) =>
+    route.fulfill({
+      json: { ready: true, engines: [], cloudKeys: { openai: false, elevenlabs: false } },
+    }),
+  );
+  let payload: any;
+  await page.route('**/api/comparison/run', (route) => {
+    payload = route.request().postDataJSON();
+    return route.fulfill({
+      contentType: 'text/event-stream',
+      body: 'data: {"type":"error","message":"Fixture stopped before provider connection"}\n\n',
+    });
+  });
+  await page.goto('/local-compare');
+  await page.getByLabel('Upload WAV file').setInputFiles({
+    name: 'test.wav',
+    mimeType: 'audio/wav',
+    buffer: Buffer.from(encodeWav(new Int16Array(16000), 16000)),
+  });
+  await page.getByRole('checkbox', { name: 'OpenAI Cloud API' }).check();
+  await page.getByRole('checkbox', { name: 'ElevenLabs Cloud API' }).check();
+  await expect(page.getByRole('button', { name: 'Run comparison', exact: true })).toBeDisabled();
+  await page.getByLabel('OpenAI API key', { exact: true }).fill('fixture-openai-secret');
+  await page.getByLabel('ElevenLabs API key', { exact: true }).fill('fixture-eleven-secret');
+  await expect(page.getByLabel('ElevenLabs API key', { exact: true })).toHaveAttribute(
+    'type',
+    'password',
+  );
+  await expect(page.getByText('Running sends this recording', { exact: false })).toBeVisible();
+  await page.screenshot({ path: '/tmp/callside-benchmark-desktop.png', fullPage: true });
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.screenshot({ path: '/tmp/callside-benchmark-mobile.png', fullPage: true });
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+  await page.getByRole('button', { name: 'Run comparison', exact: true }).click();
+  await expect(page.getByRole('alert')).toContainText('Fixture stopped');
+  expect(payload.engines).toEqual(['whisper', 'cohere', 'openai', 'elevenlabs']);
+  expect(payload.openaiKey).toBe('fixture-openai-secret');
+  expect(payload.elevenlabsKey).toBe('fixture-eleven-secret');
+  expect(await page.evaluate(() => JSON.stringify(localStorage))).not.toContain('fixture-');
+});
+
+test('desktop setup shows model progress without recording and prepares both runtimes', async ({
+  page,
+}) => {
+  await page.addInitScript(() => {
+    Object.defineProperty(window, 'callsideDesktop', {
+      value: {
+        platform: 'darwin',
+        onAnswer: () => () => {},
+        getShortcutStatus: async () => [],
+        setSessionActive: async () => {},
+        loadTemplate: async () => null,
+        updates: async () => ({
+          phase: 'current',
+          version: '0.6.0',
+          message: 'You have the latest available version.',
+        }),
+      },
+    });
+    Object.defineProperty(navigator.mediaDevices, 'getUserMedia', {
+      value: () => {
+        throw Error('Setup must not record audio');
+      },
+    });
+  });
+  let release!: () => void;
+  const wait = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  await page.route('**/api/local/prepare', async (route) => {
+    await wait;
+    await route.fulfill({ json: { ready: true } });
+  });
+  await page.route('**/api/local/status', (route) =>
+    route.fulfill({
+      json: { phase: 'downloading', percent: 37, message: 'Downloading Whisper model' },
+    }),
+  );
+  await page.route('**/api/local-speakers/start', (route) =>
+    route.fulfill({ json: { session: 'setup-session' } }),
+  );
+  let finalized = false;
+  await page.route('**/api/local-speakers/audio', (route) => {
+    finalized = route.request().postDataJSON().final === true;
+    return route.fulfill({ json: { from: 0, through: 0, segments: [] } });
+  });
+  await page.goto('/');
+  await page.getByRole('button', { name: 'Settings', exact: true }).click();
+  await page.getByRole('button', { name: 'Download and prepare models', exact: true }).click();
+  await expect(page.getByRole('progressbar', { name: 'Model preparation' })).toHaveAttribute(
+    'value',
+    '37',
+  );
+  await page
+    .getByRole('region', { name: 'Local audio setup' })
+    .screenshot({ path: '.local/installer-setup-progress.png' });
+  release();
+  await expect(page.getByRole('button', { name: 'Models ready', exact: true })).toBeDisabled();
+  expect(finalized).toBe(true);
+  await expect(page.getByRole('region', { name: 'Application updates' })).toContainText(
+    'Callside 0.6.0',
+  );
+});
+
+// Native calls are mocked at the bridge boundary. The browser still runs the
+// production capture/worklet/VAD/reconciliation and guided-test state machines.
+async function windowsDesktop(page: Page, initialState: any = null) {
+  const { DEFAULT_SETTINGS } = await import('../shared/defaults');
+  const priorTemplate = {
+    ...DEFAULT_SETTINGS,
+    language: 'en',
+    context: 'PRIVATE-SAVED-CONTEXT',
+    systemPrompt: 'Keep my prior instructions.',
+  };
+  let savedState: any = initialState,
+    template: any = structuredClone(priorTemplate),
+    session = 1;
+  const active: boolean[] = [];
+  let saves = 0,
+    relaunches = 0;
+  await page.exposeFunction('__windowsNative', async (method: string, value: any) => {
+    if (method === 'load') return structuredClone(savedState);
+    if (method === 'save') {
+      savedState = structuredClone(value);
+      saves++;
+      return;
+    }
+    if (method === 'template-load') return structuredClone(template);
+    if (method === 'template-save') {
+      template = structuredClone(value);
+      return;
+    }
+    if (method === 'template-remove') {
+      template = null;
+      return;
+    }
+    if (method === 'active') {
+      active.push(value);
+      return;
+    }
+    if (method === 'restart') {
+      expect(active.at(-1)).toBe(false);
+      expect(savedState.restartCheckpoint).toBeTruthy();
+      session++;
+      relaunches++;
+      return;
+    }
+    if (method === 'diagnostics')
+      return {
+        platform: 'win32',
+        arch: 'x64',
+        cpu: 'Synthetic CPU',
+        ramGB: 32,
+        preview: true,
+        appVersion: '0.6.0',
+        buildId: 'browser-fixture',
+        sessionId: `native-session-${session}`,
+        secureStorage: true,
+        secureStorageRestart: session > 1,
+        apiKey: 'sk-PRIVATE-DIAGNOSTIC',
+        username: 'PRIVATE-USER',
+        deviceId: 'PRIVATE-DEVICE',
+        shortcuts: [{ accelerator: 'F8', registered: true }],
+      };
+    throw Error(`Unexpected native action: ${method}`);
+  });
+  await page.addInitScript(() => {
+    const native = (method: string, value?: unknown) =>
+      (window as any).__windowsNative(method, value);
+    let shortcut: () => void = () => {};
+    Object.defineProperty(window, 'callsideDesktop', {
+      value: {
+        platform: 'win32',
+        onAnswer: (callback: () => void) => {
+          shortcut = callback;
+          return () => {
+            shortcut = () => {};
+          };
+        },
+        setSessionActive: (value: boolean) => native('active', value),
+        getTestDiagnostics: () => native('diagnostics'),
+        loadTestState: () => native('load'),
+        saveTestState: (value: unknown) => native('save', value),
+        loadTemplate: () => native('template-load'),
+        saveTemplate: (value: unknown) => native('template-save', value),
+        removeTemplate: () => native('template-remove'),
+        relaunchTest: async () => {
+          await native('restart');
+          setTimeout(() => location.reload(), 40);
+        },
+      },
+    });
+    (window as any).__testShortcut = (outside = true) => {
+      Object.defineProperty(document, 'hasFocus', { configurable: true, value: () => !outside });
+      shortcut();
+    };
+    (window as any).__captureCounts = { mic: 0, system: 0, stopped: 0 };
+    const makeStream = async (source: 'mic' | 'system') => {
+      (window as any).__captureCounts[source]++;
+      if (source === 'mic' && (window as any).__denyMic)
+        throw new DOMException('Fixture permission denied', 'NotAllowedError');
+      const context = new AudioContext(),
+        output = context.createMediaStreamDestination();
+      // The two sources share one initial phrase (speaker echo). Each then gets
+      // a distinct phrase. Frequency lets the mocked ASR distinguish real PCM.
+      const tones = source === 'mic' ? [440, 660] : [880, 1100];
+      for (const [index, hz] of tones.entries()) {
+        const oscillator = context.createOscillator(),
+          gain = context.createGain();
+        oscillator.frequency.value = hz;
+        gain.gain.value = 0.2;
+        oscillator.connect(gain).connect(output);
+        oscillator.start(context.currentTime + index * 3);
+        oscillator.stop(context.currentTime + index * 3 + 2);
+      }
+      await context.resume();
+      for (const track of output.stream.getTracks()) {
+        const stop = track.stop.bind(track);
+        track.stop = () => {
+          (window as any).__captureCounts.stopped++;
+          stop();
+          void context.close();
+        };
+      }
+      return output.stream;
+    };
+    Object.defineProperty(navigator.mediaDevices, 'getUserMedia', {
+      configurable: true,
+      value: () => makeStream('mic'),
+    });
+    Object.defineProperty(navigator.mediaDevices, 'getDisplayMedia', {
+      configurable: true,
+      value: () => makeStream('system'),
+    });
+    const NativeAudio = window.Audio;
+    (window as any).Audio = function (src: string) {
+      const element = new NativeAudio(src);
+      element.playbackRate = src.includes('speakers') ? 10 : 4;
+      return element;
+    };
+  });
+  return {
+    priorTemplate,
+    active,
+    get state() {
+      return savedState;
+    },
+    get template() {
+      return template;
+    },
+    get saves() {
+      return saves;
+    },
+    get relaunches() {
+      return relaunches;
+    },
+  };
+}
+
+async function windowsAPI(page: Page) {
+  let chatgpt = {
+    available: true,
+    connected: false,
+    pending: false,
+    error: '',
+    activeId: 'PRIVATE-ACCOUNT-ID',
+    accounts: [{ id: 'PRIVATE-ACCOUNT-ID', label: 'private@example.test', connected: false }],
+    models: [] as Array<{ id: string; name: string }>,
+  };
+  const answerRequests: any[] = [],
+    speechRequests: any[] = [],
+    speakerRequests: any[] = [],
+    unexpected: string[] = [];
+  let connectFailure = false,
+    audioFailure = false,
+    receivedSamples = 0,
+    session = 0;
+  await page.route('**/api/**', async (route) => {
+    const path = new URL(route.request().url()).pathname;
+    const body = route.request().postData() ? route.request().postDataJSON() : undefined;
+    if (path === '/api/bootstrap')
+      return route.fulfill({
+        json: { token: 'PRIVATE-CSRF-TOKEN', hasApiKey: false, models: [], chatgpt },
+      });
+    if (path === '/api/local/prepare') return route.fulfill({ json: { ready: true } });
+    if (path === '/api/local/status' || path === '/api/local-speakers/status')
+      return route.fulfill({ json: { phase: 'ready', message: 'Included fixture model ready' } });
+    if (path === '/api/local/transcribe') {
+      speechRequests.push(body);
+      if (audioFailure)
+        return route.fulfill({ status: 503, json: { error: 'Local inference unavailable.' } });
+      const wav = Buffer.from(body.audio, 'base64');
+      expect(wav.toString('ascii', 0, 4)).toBe('RIFF');
+      expect(wav.readUInt32LE(24)).toBe(16000);
+      let signs = 0,
+        crossings = 0,
+        previous = 0;
+      for (let i = 44; i + 1 < wav.length; i += 2) {
+        const value = wav.readInt16LE(i),
+          sign = Math.abs(value) > 100 ? Math.sign(value) : 0;
+        if (!sign) continue;
+        signs++;
+        if (previous && previous !== sign) crossings++;
+        previous = sign;
+      }
+      const frequency = (crossings / Math.max(1, signs)) * 8000;
+      const text =
+        frequency < 550 || (frequency >= 750 && frequency < 1000)
+          ? 'The first speaker asks about euros and pounds.'
+          : frequency < 750
+            ? 'Ich habe die Stimmen gehört.'
+            : 'The second speaker asks about taking notes.';
+      return route.fulfill({ json: { text, processingMs: 10 } });
+    }
+    if (path === '/api/local-speakers/start') {
+      receivedSamples = 0;
+      session++;
+      return route.fulfill({
+        json: { session: `speaker-session-${session}`, model: 'fixture', maxSpeakers: 4 },
+      });
+    }
+    if (path === '/api/local-speakers/audio') {
+      speakerRequests.push(body);
+      receivedSamples += body.audio ? Buffer.from(body.audio, 'base64').length / 2 : 0;
+      const through = receivedSamples / 24000;
+      return route.fulfill({
+        json: {
+          from: 0,
+          through,
+          segments: [
+            { start: 0, end: 2.7, speaker: 0 },
+            { start: 2.8, end: 5.6, speaker: 1 },
+            { start: 5.7, end: 6, speaker: 2 },
+          ].filter((segment) => segment.end <= through),
+        },
+      });
+    }
+    if (path === '/api/chatgpt/connect') {
+      if (connectFailure)
+        return route.fulfill({
+          status: 503,
+          json: {
+            error:
+              'Sign-in failed for private@example.test at C:\\Users\\Private\\auth with Bearer PRIVATE_AUTH_TOKEN',
+          },
+        });
+      chatgpt = { ...chatgpt, pending: true };
+      return route.fulfill({ json: chatgpt });
+    }
+    if (path === '/api/chatgpt') {
+      chatgpt = { ...chatgpt, pending: false, connected: true };
+      return route.fulfill({ json: chatgpt });
+    }
+    if (path === '/api/chatgpt/models') {
+      chatgpt = {
+        ...chatgpt,
+        models: [
+          { id: 'gpt-6-luna', name: 'GPT-6 Luna' },
+          { id: 'gpt-6.1-sol', name: 'GPT-6.1 Sol' },
+          { id: 'gpt-4.1-mini', name: 'Unsupported old model' },
+        ],
+      };
+      return route.fulfill({ json: chatgpt });
+    }
+    if (path === '/api/chatgpt/cancel') {
+      chatgpt = { ...chatgpt, pending: false };
+      return route.fulfill({ json: chatgpt });
+    }
+    if (path === '/api/answer') {
+      answerRequests.push(body);
+      return route.fulfill({
+        contentType: 'text/event-stream',
+        body: 'data: {"type":"delta","text":"Ich fasse die wichtigsten Punkte kurz zusammen."}\n\ndata: {"type":"done"}\n\n',
+      });
+    }
+    unexpected.push(path);
+    return route.fulfill({ status: 500, json: { error: `Unexpected test endpoint: ${path}` } });
+  });
+  await page.route(/^https?:\/\/(?!127\.0\.0\.1:4318)/, (route) => {
+    unexpected.push(route.request().url());
+    return route.abort();
+  });
+  return {
+    answerRequests,
+    speechRequests,
+    speakerRequests,
+    unexpected,
+    failConnect() {
+      connectFailure = true;
+    },
+    failAudio() {
+      audioFailure = true;
+    },
+  };
+}
+
+async function windowsReport(page: Page) {
+  const downloading = page.waitForEvent('download');
+  await page.getByRole('button', { name: 'Download test report', exact: true }).click();
+  const contents = await readFile((await (await downloading).path())!, 'utf8');
+  expect(contents).not.toMatch(
+    /PRIVATE-|private@example|PRIVATE_AUTH_TOKEN|data:audio|"audio"\s*:|"token"\s*:|"apiKey"\s*:|restartCheckpoint|previousTemplate/,
+  );
+  const report = JSON.parse(contents);
+  expect(report.schemaVersion).toBe(2);
+  expect(report.test).toBe('windows-comprehensive-preview');
+  return report;
+}
+
+async function prepareWindows(page: Page) {
+  await page.goto('/windows-check');
+  await page.getByRole('button', { name: 'Prepare test', exact: true }).click();
+  await expect(page.getByRole('button', { name: 'Model ready', exact: true })).toBeDisabled();
+  await page
+    .getByRole('checkbox', {
+      name: 'I am ready to capture my microphone and computer audio for this test.',
+    })
+    .check();
+}
+
+test('Windows quick check captures each source and exports diagnostics without credentials', async ({
+  page,
+}) => {
+  test.setTimeout(45000);
+  const native = await windowsDesktop(page),
+    api = await windowsAPI(page);
+  await prepareWindows(page);
+  await page.getByRole('button', { name: 'Test microphone', exact: true }).click();
+  await expect(page.getByTestId('check-transcript-mic')).toContainText('euros and pounds');
+  await page
+    .getByRole('button', { name: 'Text is correct', exact: true })
+    .first()
+    .click({ timeout: 18000 });
+  await page.getByRole('button', { name: 'Test computer audio', exact: true }).click();
+  await expect(page.getByTestId('check-transcript-system')).toContainText('euros and pounds');
+  await page
+    .locator('.audio-check')
+    .filter({ has: page.getByRole('heading', { name: 'Computer audio', exact: true }) })
+    .getByRole('button', { name: 'Text is correct', exact: true })
+    .click({ timeout: 15000 });
+  const report = await windowsReport(page);
+  expect(report.checks.mic.state).toBe('pass');
+  expect(report.checks.system.state).toBe('pass');
+  expect(report.checks.conversation.state).toBe('not-run');
+  expect(report.environment.ramGB).toBe(32);
+  expect(api.speechRequests.length).toBeGreaterThan(2);
+  expect(api.answerRequests).toEqual([]);
+  expect(api.unexpected).toEqual([]);
+  expect(await page.evaluate(() => (window as any).__captureCounts)).toEqual({
+    mic: 1,
+    system: 1,
+    stopped: 2,
+  });
+  expect(native.active.at(-1)).toBe(false);
+});
+
+test('Windows complete session reconciles simultaneous sources, labels final audio, signs in, triggers one subscription answer and restores settings after restart', async ({
+  page,
+}) => {
+  test.setTimeout(70000);
+  const native = await windowsDesktop(page),
+    api = await windowsAPI(page);
+  await prepareWindows(page);
+  await page.getByRole('button', { name: 'Test conversation', exact: true }).click();
+  await expect(page.getByTestId('check-transcript-conversation')).toContainText(
+    'Ich habe die Stimmen gehört',
+    { timeout: 10000 },
+  );
+  await expect(page.getByTestId('check-transcript-conversation')).toContainText(
+    'Speaker 1 · local',
+    { timeout: 10000 },
+  );
+  const conversation = page.getByRole('region', { name: '3. Conversation and speaker labels' });
+  await conversation
+    .getByRole('button', { name: 'Text is correct', exact: true })
+    .click({ timeout: 22000 });
+  await conversation.getByRole('button', { name: 'Sources are correct', exact: true }).click();
+  await conversation
+    .getByRole('button', { name: 'Speaker labels are correct', exact: true })
+    .click();
+  expect(api.speakerRequests.at(-1).final).toBe(true);
+  expect(api.speechRequests.every((request) => request.language === 'auto')).toBe(true);
+  await page.getByRole('button', { name: 'Skip real call', exact: true }).click();
+  await page.getByRole('button', { name: 'Connect to ChatGPT', exact: true }).click();
+  await expect(
+    page.getByText('Finish signing in in your browser, then return here.', { exact: true }),
+  ).toBeVisible();
+  await expect(page.getByText('ChatGPT connected.', { exact: true })).toBeVisible();
+  await page.getByRole('button', { name: 'Refresh models', exact: true }).click();
+  await expect(
+    page.getByRole('combobox', { name: 'Answer model', exact: true }).locator('option'),
+  ).toHaveCount(2);
+  await page
+    .getByRole('combobox', { name: 'Answer model', exact: true })
+    .selectOption('gpt-6.1-sol');
+  await page.getByRole('button', { name: 'Use shortcut for one answer', exact: true }).click();
+  await page.evaluate(() => (window as any).__testShortcut(true));
+  await expect(
+    page.getByText('Ich fasse die wichtigsten Punkte kurz zusammen.', { exact: true }),
+  ).toBeVisible();
+  await page.getByRole('button', { name: 'Useful and fast enough', exact: true }).click();
+  await page.evaluate(() => (window as any).__testShortcut(true));
+  await expect.poll(() => api.answerRequests.length).toBe(1);
+  expect(api.answerRequests[0]).toMatchObject({
+    mode: 'manual',
+    question: '',
+    settings: {
+      answerBilling: 'chatgpt',
+      model: 'gpt-6.1-sol',
+      reasoningEffort: 'low',
+      maxOutputTokens: null,
+    },
+  });
+  expect(api.answerRequests[0].transcript.some((entry: any) => entry.source === 'mic')).toBe(true);
+  expect(api.answerRequests[0].transcript.some((entry: any) => entry.attribution === 'local')).toBe(
+    true,
+  );
+  await page.getByRole('button', { name: 'Save progress and restart', exact: true }).click();
+  await expect(
+    page.getByText(
+      'The app restarted. Saved settings and encrypted storage survived. Previous settings were restored.',
+    ),
+  ).toBeVisible({ timeout: 10000 });
+  expect(native.relaunches).toBe(1);
+  expect(native.template).toEqual(native.priorTemplate);
+  const report = await windowsReport(page);
+  expect(report.checks.conversation.state).toBe('pass');
+  expect(report.checks.conversation.echoCount).toBeGreaterThan(0);
+  expect(report.checks.conversation.speakerCount).toBe(3);
+  expect(
+    report.checks.conversation.entries.filter((entry: any) =>
+      entry.text.includes('euros and pounds'),
+    ),
+  ).toHaveLength(1);
+  expect(report.checks.shortcut).toMatchObject({ state: 'pass', outsideApp: true });
+  expect(report.checks.chatgpt).toMatchObject({
+    state: 'pass',
+    requestCount: 1,
+    model: 'gpt-6.1-sol',
+  });
+  expect(report.checks.restart).toMatchObject({
+    state: 'pass',
+    settingsMatch: true,
+    chatgptPersisted: true,
+    secureStoragePersisted: true,
+  });
+  expect(report.checks.call.state).toBe('skipped');
+  expect(api.unexpected).toEqual([]);
+});
+
+test('Windows failed audio and sign-in remain reportable, skipped steps are not passes, and interrupted progress survives reload', async ({
+  page,
+}) => {
+  test.setTimeout(25000);
+  const native = await windowsDesktop(page, {
+    schemaVersion: 2,
+    savedAt: new Date().toISOString(),
+    checks: { conversation: { state: 'running', message: 'Recording' } },
+    preferences: { output: 'headphones', model: '' },
+    notes: 'Keep this note.',
+  });
+  const api = await windowsAPI(page);
+  api.failConnect();
+  await prepareWindows(page);
+  await expect(
+    page.getByText('The app closed during this step. Retry it or continue with the other checks.'),
+  ).toBeVisible();
+  expect(await page.evaluate(() => (window as any).__captureCounts)).toEqual({
+    mic: 0,
+    system: 0,
+    stopped: 0,
+  });
+  await page.evaluate(() => {
+    (window as any).__denyMic = true;
+  });
+  await page.getByRole('button', { name: 'Test microphone', exact: true }).click();
+  await expect(
+    page
+      .getByText(
+        'Audio access was denied. Allow microphone and system audio in system settings and restart recording.',
+        { exact: true },
+      )
+      .first(),
+  ).toBeVisible();
+  await page.getByRole('button', { name: 'Connect to ChatGPT', exact: true }).click();
+  await expect(page.getByRole('alert')).toContainText('[email]');
+  await expect(page.getByRole('alert')).not.toContainText('PRIVATE_AUTH_TOKEN');
+  for (const name of ['Skip computer audio', 'Skip real call', 'Skip shortcut', 'Skip restart'])
+    await page.getByRole('button', { name, exact: true }).click();
+  await expect.poll(() => native.state?.checks.restart?.state).toBe('skipped');
+  await page.reload();
+  await expect(
+    page.getByRole('textbox', { name: 'Anything else that did not work? (optional)' }),
+  ).toHaveValue('Keep this note.');
+  const report = await windowsReport(page);
+  expect(report.notes).toBe('Keep this note.');
+  expect(report.output).toBe('headphones');
+  expect(report.checks.mic.state).toBe('fail');
+  expect(report.checks.conversation.state).toBe('stopped');
+  expect(report.checks.chatgpt.state).toBe('fail');
+  for (const check of ['system', 'call', 'shortcut', 'restart'])
+    expect(report.checks[check].state).toBe('skipped');
+  expect(api.answerRequests).toEqual([]);
+  expect(api.speakerRequests).toEqual([]);
+  expect(api.unexpected).toEqual([]);
+  expect(native.template).toEqual(native.priorTemplate);
+});
+
+test('Windows native report save handles cancel and failure before a successful retry without losing results', async ({
+  page,
+}) => {
+  const native = await windowsDesktop(page),
+    api = await windowsAPI(page);
+  let attempt = 0;
+  const reports: any[] = [];
+  await page.exposeFunction('__saveWindowsReport', async (value: any) => {
+    reports.push(value);
+    attempt++;
+    if (attempt === 1) return { saved: false };
+    if (attempt === 2) throw Error('Disk write failed at /Users/PRIVATE-USER/report.json');
+    return { saved: true };
+  });
+  await page.goto('/windows-check');
+  await page.evaluate(() => {
+    (window.callsideDesktop as any).saveTestReport = (window as any).__saveWindowsReport;
+  });
+  await page
+    .getByRole('textbox', { name: 'Anything else that did not work? (optional)' })
+    .fill('The report must survive a cancelled save.');
+  await page.getByRole('button', { name: 'Skip real call', exact: true }).click();
+  await page.getByRole('button', { name: 'Download test report', exact: true }).click();
+  await expect(
+    page.getByText('Save cancelled. Your results are still here.', { exact: true }),
+  ).toBeVisible();
+  await page.getByRole('button', { name: 'Download test report', exact: true }).click();
+  await expect(page.getByText(/Could not save the report:/)).toContainText('[local path]');
+  await page.getByRole('button', { name: 'Download test report', exact: true }).click();
+  await expect(
+    page.getByText('Report saved. Send the JSON file back.', { exact: true }),
+  ).toBeVisible();
+  expect(reports).toHaveLength(3);
+  for (const report of reports) {
+    expect(report.schemaVersion).toBe(2);
+    expect(report.notes).toBe('The report must survive a cancelled save.');
+    expect(report.checks.call.state).toBe('skipped');
+    expect(JSON.stringify(report)).not.toMatch(
+      /PRIVATE-|apiKey|previousTemplate|restartCheckpoint/,
+    );
+  }
+  expect(api.unexpected).toEqual([]);
+  expect(api.answerRequests).toEqual([]);
+  expect(native.template).toEqual(native.priorTemplate);
 });

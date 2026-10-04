@@ -4,7 +4,7 @@ Callside is designed as a local application used by one person on their own comp
 
 ## Data flow
 
-Real capture sends selected microphone/system audio to OpenAI for transcription. Answer requests send the configured prompt, context, recent transcript, typed question, and recent suggestions. The browser/Electron renderer communicates with a local server, and only that server calls OpenAI with the provider key.
+Transcription defaults to local Whisper, and background speaker labeling defaults to experimental local LS-EEND. These modes process audio on this computer; initial model preparation downloads model files. Selecting OpenAI transcription sends selected microphone/system audio to OpenAI. Selecting OpenAI speaker labeling additionally sends call audio to OpenAI. There is no automatic fallback from local audio to a paid cloud provider. Answer requests send the configured prompt, context, recent transcript, typed question, and recent suggestions. The browser/Electron renderer communicates with a local server, and only that server calls OpenAI with the provider key.
 
 UI-entered keys live in server memory until the server process exits or the key is replaced. In the desktop app, **Remember API key on this device** additionally saves ciphertext in `openai-key.enc` under Electron's per-user app data directory. Electron's asynchronous `safeStorage` API uses the OS encryption provider, including Keychain on macOS. The encrypted file is outside the repository, written atomically with owner-only permissions, and loaded into the local server on startup. Keys are never returned by bootstrap or key-management responses, and are excluded from templates and exports. Session-only replacement and **Remove API key** delete the saved ciphertext. Unavailable encryption and Linux's `basic_text` backend are rejected, with no plaintext fallback. A corrupt or locked saved key does not prevent opening the app; the UI allows replacing or removing it.
 
@@ -14,7 +14,11 @@ Session transcripts and suggestions stay in memory unless the user exports them.
 
 The optional **Save template** action stores settings, prompts, and reference material. Desktop mode uses `template.json` in Electron's per-user app data directory, written atomically with owner-only file permissions. The main process accepts only known settings fields through IPC from the trusted top-level app window. Browser mode uses `localStorage`. Both exclude keys, transcripts, and suggestions; template content is not encrypted. **Reset** removes the saved template. Take care when saving confidential context on a shared device.
 
-Background attribution sends an additional copy of call audio and up to four temporary voice reference clips to OpenAI. Clips remain in capture memory and are cleared when capture ends; they are not included in saved templates, JSON, or Markdown exports. Resulting speaker labels are estimates, not verified personal identities.
+OpenAI background attribution sends an additional copy of call audio and up to four temporary voice reference clips to OpenAI. Clips remain in capture memory and are cleared when capture ends; they are not included in saved templates, JSON, or Markdown exports. Resulting speaker labels are estimates, not verified personal identities.
+
+## Comparison and test data
+
+The optional comparison page sends recordings to OpenAI or ElevenLabs only when that provider is selected. Local Whisper/Cohere selections process audio locally. Comparison reports can contain reference text and transcripts; inspect them before sharing. The Windows guided test can export a diagnostic report; review it before posting. The included AMI test excerpt is licensed public research audio, not a user recording; its separate attribution is included beside the fixture.
 
 ## Local server boundary
 
@@ -30,7 +34,7 @@ The desktop app saves OAuth credentials only as OS-encrypted ciphertext in `chat
 
 ## Reporting a vulnerability
 
-If the published repository offers **Security → Report a vulnerability**, use that private reporting channel. If private reporting has not been enabled, ask a repository maintainer for a private contact method without posting exploit details or sensitive data in a public issue. Never attach API keys, raw private audio, or identifiable call transcripts.
+Use [GitHub private vulnerability reporting](https://github.com/Eslsamu/callside/security/advisories/new) for security issues. If that channel is unavailable, ask the maintainer for a private contact method without posting exploit details in a public issue. Never attach API keys, raw private audio, or identifiable call transcripts.
 
 Include affected versions, a minimal reproduction with synthetic data, the expected security boundary, and the impact. There is no guaranteed response time or paid bug bounty.
 

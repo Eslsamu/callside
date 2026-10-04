@@ -1,17 +1,41 @@
 # Releasing Callside
 
-## While the repository is private
+## Source publication and installers
 
-Keep GitHub visibility private until the owner explicitly decides to publish. README positioning and topics prepare discovery for that future release; private repositories are not publicly indexed. The MIT license does not change repository visibility.
+Publishing the source repository is separate from a version release or installer publication. Keep current development changes under Unreleased. Do not create tags, installer artifacts, or GitHub releases without an explicit release request.
 
-## Versioned releases
+## Development is separate from releasing
 
-1. Verify the working tree contains only intended code, documentation, and synthetic fixtures. Exclude API keys, saved templates, real transcripts, local profiles, and recordings from both the tree and Git history.
-2. Run `npm ci`, install Playwright Chromium, then run `npm run check`. Run `npm run test:desktop` on the target desktop OS.
-3. Update the version with `npm version patch --no-git-tag-version` (or `minor` for a feature release), and describe changes and limitations in `CHANGELOG.md`.
-4. Commit the reviewed changes. Build with `npm run desktop:pack` or `npm run desktop:dist` on the target OS. Outputs go into `release/v<version>`; `release/Latest` follows successful packaging.
-5. Test the actual packaged application with synthetic data. Repeat real-audio checks where a release claims support. Local macOS development builds may use `CSC_IDENTITY_AUTO_DISCOVERY=false`; this does not create a signed distribution.
-6. Tag the verified commit as `v<version>` and create a GitHub release with matching notes. Clearly identify source-only releases and untested platforms. Attach installers only when their provenance, signing status, and platform checks are documented.
+Small fixes and features accumulate under **Unreleased** in CHANGELOG.md. They do not automatically get a version bump, tag, DMG, ZIP, or GitHub release. Keep package.json and package-lock.json at the last release version until the owner requests a release.
+
+- `npm run dev`: browser development.
+- `npm run desktop`: desktop development without packaging.
+- `npm run desktop:pack`: unpacked app for packaging-specific checks, in `.local/desktop-preview`. This does not build a DMG or change `release/Latest`.
+
+Development previews are not distributable releases, even though their package version remains the last released version.
+
+## Version numbers
+
+Use `major.minor.patch` and group changes by user-facing scope:
+
+- **Patch**, e.g. 0.6.1: bug fixes and small compatible improvements.
+- **Minor**, e.g. 0.7.0: a meaningful feature release containing multiple completed changes. While below 1.0, breaking changes also require a minor version and explicit migration notes.
+- **Major**, e.g. 1.0.0: the first declared stable release; subsequent breaking changes increment the major version.
+- Optional release candidates use a suffix such as 0.7.0-rc.1 and are built only when explicitly requested.
+
+A commit is not a release. Never replace the files of an already distributed version.
+
+## Versioned release checklist
+
+1. Obtain an explicit request to prepare the next version release. Review the accumulated Unreleased changes and choose patch or minor accordingly.
+2. Verify that only intended source, docs, and synthetic fixtures are included. Exclude credentials, real transcripts, profiles, and recordings from the tree and history.
+3. Run the checks relevant to the release, including `npm run check` and desktop checks on the target OS.
+4. Bump once using `npm version patch --no-git-tag-version` or `npm version minor --no-git-tag-version`. Move Unreleased notes into a dated version section, leaving an empty Unreleased section for future work.
+5. Commit the reviewed release state. For an explicitly requested local test release, run `npm run desktop:dist -- --version <version>`. For public distribution with Developer ID signing and notarization, run `npm run desktop:release -- --version <version>`.
+6. Installer commands require the version to match package.json and refuse to overwrite existing DMG/ZIP artifacts. Outputs go into `release/v<version>`; only completed release builds update `release/Latest`. A failed build that leaves artifacts requires inspecting and removing only its incomplete outputs before retrying; never remove a distributed release to bypass the guard.
+7. Verify the packaged app and installer. Record signing/notarization status and platform limitations. With publishing authorization, tag the verified commit as `v<version>` and publish matching release notes and artifacts. Build commands do not publish automatically.
+
+See [macOS installation and signing](macos-installer.md) for platform requirements.
 
 ## Before making the repository public
 

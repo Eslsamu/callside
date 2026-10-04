@@ -1,6 +1,6 @@
 {
   "name": "callside",
-  "version": "0.4.0",
+  "version": "0.6.0",
   "description": "Open-source live call assistance without typing. Contextual suggestions, transcription, and global shortcuts.",
   "private": true,
   "type": "module",
@@ -10,13 +10,14 @@
     "node": ">=22.12"
   },
   "scripts": {
+    "local:speakers:setup": "node scripts/local-speakers-setup.mjs",
     "dev": "tsx server/index.ts",
     "local:test": "tsx server/local-test.ts",
     "build": "tsc --noEmit && vite build && tsc -p tsconfig.server.json",
     "start": "node dist-server/server/index.js",
     "desktop": "npm run build && electron .",
-    "desktop:pack": "npm run build && electron-builder --dir",
-    "desktop:dist": "npm run build && electron-builder",
+    "desktop:pack": "npm run desktop:runtimes && npm run build && electron-builder --dir --publish never --config.directories.output=.local/desktop-preview",
+    "desktop:dist": "node scripts/build-release.mjs",
     "test": "vitest run",
     "test:e2e": "playwright test",
     "check": "npm run build && npm test && npm run test:e2e",
@@ -24,14 +25,19 @@
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "local:compare": "tsx server/local-compare.ts",
-    "local:setup": "node scripts/cohere-setup.mjs"
+    "local:setup": "node scripts/cohere-setup.mjs",
+    "desktop:runtimes": "node scripts/desktop-runtimes.mjs",
+    "desktop:release": "node scripts/build-release.mjs --public",
+    "desktop:windows-preview": "node scripts/windows-preview.mjs"
   },
   "dependencies": {
     "@fontsource-variable/dm-sans": "^5.3.0",
     "dotenv": "^17.2.3",
+    "electron-updater": "^6.8.9",
     "express": "^5.1.0",
     "jose": "^6.2.12",
     "lucide-react": "^0.468.0",
+    "onnxruntime-web": "1.30.0",
     "openai": "^6.0.0",
     "react": "^19.2.0",
     "react-dom": "^19.2.0",
@@ -58,12 +64,16 @@
     "appId": "org.callside.app",
     "productName": "Callside",
     "artifactName": "${productName}-${version}-${os}-${arch}.${ext}",
+    "asarUnpack": [
+      "desktop/bin/**/*"
+    ],
     "afterAllArtifactBuild": "./scripts/release-links.mjs",
     "files": [
       "dist/**/*",
       "dist-server/**/*",
       "desktop/**/*",
-      "package.json"
+      "package.json",
+      "LICENSE"
     ],
     "directories": {
       "output": "release/v${version}"
@@ -80,7 +90,11 @@
         "NSScreenCaptureUsageDescription": "Callside captures shared audio during calls you start."
       },
       "entitlements": "desktop/entitlements.mac.plist",
-      "entitlementsInherit": "desktop/entitlements.mac.plist"
+      "entitlementsInherit": "desktop/entitlements.mac.plist",
+      "minimumSystemVersion": "14.0",
+      "signIgnore": [
+        "\\.pak$"
+      ]
     },
     "win": {
       "target": [
@@ -93,7 +107,34 @@
       ],
       "executableName": "org.callside.app"
     },
-    "icon": "desktop/icon.png"
+    "icon": "desktop/icon.png",
+    "publish": [
+      {
+        "provider": "github",
+        "owner": "Eslsamu",
+        "repo": "callside",
+        "releaseType": "release"
+      }
+    ],
+    "dmg": {
+      "title": "Callside ${version}",
+      "contents": [
+        {
+          "x": 140,
+          "y": 180
+        },
+        {
+          "x": 420,
+          "y": 180,
+          "type": "link",
+          "path": "/Applications"
+        }
+      ],
+      "window": {
+        "width": 560,
+        "height": 360
+      }
+    }
   },
   "author": "Callside contributors",
   "repository": {

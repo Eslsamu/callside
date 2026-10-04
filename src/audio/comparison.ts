@@ -194,11 +194,12 @@ export async function* streamComparison<T extends { type: string }>(
   language: string,
   reference: string,
   signal: AbortSignal,
+  options: { engines?: string[]; openaiKey?: string; elevenlabsKey?: string } = {},
 ): AsyncGenerator<T> {
   const response = await fetch('/api/comparison/run', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', 'X-Callside-Token': token },
-    body: JSON.stringify({ audio: audioBase64(audio), language, reference }),
+    body: JSON.stringify({ audio: audioBase64(audio), language, reference, ...options }),
     signal,
   });
   if (!response.ok) {

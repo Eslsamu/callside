@@ -21,6 +21,12 @@ import {
 import { attachRealtime, type RealtimeFactory } from './realtime.js';
 import { attachComparison, type ComparisonEngines } from './comparison.js';
 import { attachLocalTest } from './local-test-routes.js';
+import { attachLocalLive } from './local-live.js';
+import {
+  attachLocalSpeakers,
+  startSpeakerWorker,
+  type LocalSpeakerWorker,
+} from './local-speakers.js';
 import type { LocalEngine } from '../shared/local-test.js';
 
 export interface ServerOptions {
@@ -35,6 +41,14 @@ export interface ServerOptions {
   providerFactory?: (apiKey: string) => AiProvider;
   realtimeFactory?: RealtimeFactory;
   localEngine?: LocalEngine;
+  localModelDirectory?: string;
+  localWhisperBinary?: string;
+  bundledWhisperModel?: string;
+  localSpeakerBinary?: string;
+  bundledSpeakerModel?: string;
+  localSpeakerFactory?: (
+    progress: (value: import('./whisper-model.js').ModelProgress) => void,
+  ) => Promise<LocalSpeakerWorker>;
   comparisonEngines?: ComparisonEngines;
   keyStore?: {
     load(): Promise<string | null>;
@@ -160,7 +174,20 @@ export async function startServer(options: ServerOptions = {}): Promise<RunningS
   });
   app.use('/api', express.json({ limit: '7mb', strict: true }));
   attachLocalTest(app, options.localEngine);
-  const closeComparison = attachComparison(app, options.comparisonEngines);
+  const closeLocal = attachLocalLive(
+    app,
+    options.localModelDirectory,
+    options.localEngine,
+    options.localWhisperBinary,
+    options.bundledWhisperModel,
+  );
+  const closeSpeakers = attachLocalSpeakers(
+    app,
+    options.localSpeakerFactory ??
+      ((progress) =>
+        startSpeakerWorker(options.localSpeakerBinary, progress, options.bundledSpeakerModel)),
+  );
+  const closeComparison = attachComparison(app, options.comparisonEngines, getApiKey);
   app.get('/api/chatgpt', (_req, res) =>
     res.json(
       chatgpt?.status() ?? {
@@ -440,7 +467,7 @@ export async function startServer(options: ServerOptions = {}): Promise<RunningS
     if (production) {
       const dist = resolve(projectRoot, 'dist');
       app.use(express.static(dist, { index: false }));
-      app.get('/{*path}', (_req, res) => res.sendFile(resolve(dist, 'index.html')));
+      app.get('/{*path}', (_req, res) => res.sendFile('index.html', { root: dist }));
     } else {
       const { createServer: createViteServer } = await import('vite');
       vite = await createViteServer({
@@ -473,6 +500,8 @@ export async function startServer(options: ServerOptions = {}): Promise<RunningS
       chatgpt?.cancel();
       detachRealtime();
       closeComparison();
+      closeSpeakers();
+      await closeLocal();
       await vite?.close();
       const closing = new Promise<void>((resolveClose) => server.close(() => resolveClose()));
       server.closeAllConnections();

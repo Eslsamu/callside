@@ -11,9 +11,20 @@ const {
 } = require('electron');
 const { createKeyStore } = require('./key-store.cjs');
 const { createTemplateStore } = require('./template-store.cjs');
+const { createTestStateStore, sanitizeTestReport } = require('./test-state.cjs');
+const { randomUUID } = require('node:crypto');
 const path = require('node:path');
 const { pathToFileURL } = require('node:url');
 const smokeTest = process.argv.includes('--smoke-test');
+const buildMetadata = require('../package.json');
+const windowsPreview = Boolean(buildMetadata.callsideWindowsPreview);
+if (windowsPreview && !smokeTest) {
+  app.setName('Callside Windows Test');
+  app.setPath('userData', path.join(app.getPath('appData'), 'Callside Windows Test'));
+}
+const ownsInstance = smokeTest || app.requestSingleInstanceLock();
+if (!ownsInstance) app.quit();
+
 if (smokeTest && process.platform === 'darwin') {
   app.setActivationPolicy('prohibited');
   app.dock?.hide();
@@ -36,6 +47,17 @@ let server;
 let appOrigin = '';
 let shuttingDown = false;
 let shortcutStatus = [];
+let updates;
+let sessionActive = false;
+const processSessionId = randomUUID();
+let storageProbe;
+app.on('second-instance', () => {
+  if (window && !window.isDestroyed()) {
+    if (window.isMinimized()) window.restore();
+    window.show();
+    window.focus();
+  }
+});
 
 const trusted = (url) => {
   try {
@@ -84,7 +106,7 @@ function createWindow() {
   window.on('closed', () => {
     window = undefined;
   });
-  void window.loadURL(server.url);
+  void window.loadURL(server.url + (windowsPreview && !smokeTest ? '/windows-check' : ''));
 }
 
 async function boot() {
@@ -95,10 +117,41 @@ async function boot() {
     path.join(app.getPath('userData'), 'template.json'),
     DEFAULT_SETTINGS,
   );
+  const testStateStore = createTestStateStore(
+    path.join(app.getPath('userData'), 'windows-test.json'),
+    DEFAULT_SETTINGS,
+  );
+  const probeStore = createKeyStore(
+    path.join(app.getPath('userData'), 'windows-test-storage.enc'),
+    safeStorage,
+    process.platform,
+    (value) => value === 'callside-test-storage-sentinel',
+  );
   const serverModule = await import(
     pathToFileURL(path.join(__dirname, '../dist-server/server/index.js')).href
   );
   server = await serverModule.startServer({
+    localWhisperBinary: app.isPackaged
+      ? path.join(
+          process.resourcesPath,
+          'app.asar.unpacked',
+          'desktop/bin',
+          process.platform === 'win32' ? 'windows/whisper-server.exe' : 'whisper-server',
+        )
+      : undefined,
+    localModelDirectory: path.join(app.getPath('userData'), 'models'),
+    bundledWhisperModel:
+      windowsPreview && app.isPackaged
+        ? path.join(process.resourcesPath, 'models', 'ggml-large-v3-turbo-q5_0.bin')
+        : undefined,
+
+    localSpeakerBinary: app.isPackaged
+      ? path.join(process.resourcesPath, 'app.asar.unpacked', 'desktop/bin/callside-diarizer')
+      : path.join(__dirname, 'bin/callside-diarizer'),
+    bundledSpeakerModel:
+      windowsPreview && app.isPackaged
+        ? path.join(process.resourcesPath, 'models', 'speakers', 'ls_eend_ami_step.onnx')
+        : undefined,
     port: 0,
     production: true,
     keyStore: createKeyStore(path.join(app.getPath('userData'), 'openai-key.enc'), safeStorage),
@@ -180,8 +233,103 @@ async function boot() {
         callback({});
       }
     },
-    { useSystemPicker: !macAudioCompatibility },
+    { useSystemPicker: process.platform === 'darwin' && !macAudioCompatibility },
   );
+
+  const { autoUpdater } = require('electron-updater');
+  updates = require('./updates.cjs').createUpdates(autoUpdater, {
+    enabled: app.isPackaged && !smokeTest && !windowsPreview,
+    version: app.getVersion(),
+    canInstall: () => !sessionActive,
+  });
+  ipcMain.handle('callside:updates', (event, action) => {
+    if (!trustedSender(event)) throw Error('Invalid desktop request.');
+    if (action === 'status') return updates.status();
+    if (action === 'check') return updates.check();
+    if (action === 'install') return updates.install();
+    throw Error('Unknown update action.');
+  });
+  ipcMain.handle('callside:test-diagnostics', async (event) => {
+    if (!trustedSender(event)) throw Error('Invalid desktop request.');
+    const os = require('node:os');
+    storageProbe ??= (async () => {
+      let secureStorage = false,
+        secureStorageRestart = null;
+      try {
+        const previous = await probeStore.load();
+        secureStorageRestart =
+          previous === null ? null : previous === 'callside-test-storage-sentinel';
+        await probeStore.save('callside-test-storage-sentinel');
+        secureStorage = (await probeStore.load()) === 'callside-test-storage-sentinel';
+      } catch {
+        secureStorageRestart = false;
+        /* Report capability failure without credentials or OS error details. */
+      }
+      return { secureStorage, secureStorageRestart };
+    })();
+    return {
+      platform: process.platform,
+      arch: process.arch,
+      osVersion: os.release(),
+      machine: os.machine(),
+      cpu: os.cpus()[0]?.model,
+      cpuThreads: os.cpus().length,
+      ramGB: Math.round(os.totalmem() / 1024 ** 3),
+      appVersion: app.getVersion(),
+      electronVersion: process.versions.electron,
+      preview: windowsPreview,
+      buildId: buildMetadata.callsideBuildId ?? 'development',
+      sessionId: processSessionId,
+      ...(await storageProbe),
+      shortcuts: shortcutStatus,
+    };
+  });
+  const trustedTest = (event) => {
+    if (
+      !trustedSender(event) ||
+      (!windowsPreview && !smokeTest) ||
+      new URL(event.senderFrame.url).pathname !== '/windows-check'
+    )
+      throw Error('This action is available only in the Windows test preview.');
+  };
+  ipcMain.handle('callside:test-load', (event) => {
+    trustedTest(event);
+    return testStateStore.load();
+  });
+  ipcMain.handle('callside:test-save', (event, value) => {
+    trustedTest(event);
+    return testStateStore.save(value);
+  });
+  ipcMain.handle('callside:test-report', async (event, value) => {
+    trustedTest(event);
+    const contents = JSON.stringify(sanitizeTestReport(value), null, 2);
+    const selected = await dialog.showSaveDialog(window, {
+      title: 'Save Callside test report',
+      defaultPath: path.join(
+        app.getPath('downloads'),
+        `callside-windows-test-${new Date().toISOString().replace(/[:.]/g, '-')}.json`,
+      ),
+      filters: [{ name: 'JSON report', extensions: ['json'] }],
+    });
+    if (selected.canceled || !selected.filePath) return { saved: false };
+    await require('node:fs/promises').writeFile(selected.filePath, contents, { mode: 0o600 });
+    return { saved: true };
+  });
+  ipcMain.handle('callside:test-relaunch', async (event) => {
+    trustedTest(event);
+    if (sessionActive) throw Error('Stop the active test before restarting.');
+    await testStateStore.flush();
+    // A brief delay lets the invoking UI receive its acknowledgement first.
+    setTimeout(() => {
+      app.relaunch();
+      app.quit();
+    }, 150);
+  });
+  ipcMain.handle('callside:session-active', (event, active) => {
+    if (!trustedSender(event) || typeof active !== 'boolean')
+      throw Error('Invalid desktop request.');
+    sessionActive = active;
+  });
 
   ipcMain.handle('callside:set-always-on-top', (event, enabled) => {
     if (!trustedSender(event) || typeof enabled !== 'boolean')
@@ -225,7 +373,7 @@ app
   .whenReady()
   .then(async () => {
     if (smokeTest && process.platform === 'darwin') app.dock?.hide();
-    await boot();
+    if (ownsInstance) await boot();
   })
   .catch((error) => {
     if (smokeTest) {
@@ -244,6 +392,7 @@ app.on('activate', () => {
 });
 app.on('window-all-closed', () => app.quit());
 app.on('before-quit', (event) => {
+  updates?.close();
   globalShortcut.unregisterAll();
   if (shuttingDown || !server) return;
   event.preventDefault();

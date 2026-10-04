@@ -1,0 +1,60 @@
+{
+  "title": "AMI four-speaker meeting excerpt",
+  "file": "/windows-speakers-test.wav",
+  "durationSeconds": 50,
+  "language": "en",
+  "referenceSpeakers": 4,
+  "meeting": "ES2004a",
+  "sourceOffsetSeconds": 570,
+  "sourceChannel": "Mix-Headset",
+  "sha256": "011ce822df5be30dc19c990d243e539c3cf0b99b477dff0c618633422a715b3f",
+  "credit": "AMI Meeting Corpus, AMI Project — CC BY 4.0. Cropped and resampled by Callside.",
+  "sourceUrl": "https://groups.inf.ed.ac.uk/ami/download/",
+  "mirrorUrl": "https://huggingface.co/datasets/FluidInference/ami-corpus-mirror",
+  "licenseUrl": "https://creativecommons.org/licenses/by/4.0/",
+  "annotationsUrl": "https://groups.inf.ed.ac.uk/ami/AMICorpusAnnotations/ami_public_manual_1.6.2.zip",
+  "instructions": "Listen without speaking. Check that the long turns below use different labels, and that the first voice keeps its label when it returns. Speaker numbers themselves do not matter. Short overlapping remarks may remain ambiguous.",
+  "cues": [
+    {
+      "start": 0,
+      "end": 5.32,
+      "referenceSpeaker": "FEE013",
+      "description": "First voice asks about converting euros to pounds.",
+      "textCue": "Euros, which I don't actually know what that is in Pounds, at all. Any ideas?"
+    },
+    {
+      "start": 18.37,
+      "end": 22.28,
+      "referenceSpeaker": "FEE016",
+      "description": "Another voice asks whether they should take notes.",
+      "textCue": "Should we be making notes of this? We can just refer to this later can't we?"
+    },
+    {
+      "start": 24.19,
+      "end": 38.09,
+      "referenceSpeaker": "MEE014",
+      "description": "A third voice discusses products already on the market costing about twenty pounds.",
+      "textCue": "the ones on the market at the moment ... about twenty pounds anyway"
+    },
+    {
+      "start": 43.51,
+      "end": 47.82,
+      "referenceSpeaker": "FEE013",
+      "description": "The first voice returns and mentions a production cost of twelve fifty.",
+      "textCue": "Yeah, um production cost's at twelve fifty"
+    },
+    {
+      "start": 47.54,
+      "end": 49.59,
+      "referenceSpeaker": "MEO015",
+      "description": "A fourth voice comments on the margin.",
+      "textCue": "Okay, pretty huge margin."
+    }
+  ],
+  "verification": {
+    "model": "LS-EEND AMI ONNX CPU WASM",
+    "detectedSpeakers": 4,
+    "testedOn": "Apple M1 Pro; Windows hardware validation pending",
+    "limitations": "Chosen as a short functional check with known voices, not an unbiased benchmark. The model still confuses some early overlapping remarks. It does not assign real names."
+  }
+}

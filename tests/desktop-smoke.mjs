@@ -50,7 +50,7 @@ try {
   await expect(
     page.getByRole('combobox', { name: 'Pay for suggestions with', exact: true }),
   ).toHaveValue('api');
-  await expect(page.getByLabel('Identify call speakers in the background')).toBeChecked();
+  await expect(page.getByLabel('Speaker labeling')).toHaveValue('local');
   await expect(page.getByRole('button', { name: 'Save API key', exact: true })).toBeDisabled();
   await page.getByRole('button', { name: 'Workshop', exact: true }).click();
   await expect(

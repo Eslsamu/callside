@@ -6,6 +6,8 @@ import { dirname, resolve } from 'node:path';
 import { setTimeout as delay } from 'node:timers/promises';
 import type { LocalEngine } from '../shared/local-test.js';
 
+export class WhisperStartupError extends Error {}
+
 async function unusedPort(): Promise<number> {
   const socket = createServer();
   await new Promise<void>((done, reject) => {
@@ -30,8 +32,27 @@ async function terminate(child: ChildProcess): Promise<void> {
 /** Persistent local inference. The private engine URL never reaches the renderer. */
 export async function startLocalWhisper(
   modelPath: string,
+  bundledBinary?: string,
 ): Promise<LocalEngine & { close(): Promise<void> }> {
-  await access(modelPath);
+  try {
+    await access(modelPath);
+  } catch {
+    throw new WhisperStartupError(
+      'The local Whisper model is missing or unreadable. Extract the complete test package and retry.',
+    );
+  }
+  let binary = bundledBinary || process.env.WHISPER_SERVER_BIN;
+  if (!binary && process.platform === 'darwin') {
+    for (const candidate of ['/opt/homebrew/bin/whisper-server', '/usr/local/bin/whisper-server']) {
+      try {
+        await access(candidate);
+        binary = candidate;
+        break;
+      } catch {
+        /* Try PATH next. */
+      }
+    }
+  }
   const port = await unusedPort();
   const privatePath = `/${randomBytes(32).toString('hex')}`;
   // whisper-server otherwise serves a public form and /load endpoint. Put every route
@@ -40,7 +61,7 @@ export async function startLocalWhisper(
   await mkdir(publicDir, { recursive: true });
   const base = `http://127.0.0.1:${port}${privatePath}`;
   const child = spawn(
-    process.env.WHISPER_SERVER_BIN || 'whisper-server',
+    binary || 'whisper-server',
     [
       '--model',
       resolve(modelPath),
@@ -64,7 +85,7 @@ export async function startLocalWhisper(
       '--language',
       'de',
     ],
-    { stdio: ['ignore', 'ignore', 'pipe'] },
+    { stdio: ['ignore', 'ignore', 'pipe'], windowsHide: true },
   );
   let failed = '';
   let diagnostics = '';
@@ -91,7 +112,16 @@ export async function startLocalWhisper(
     await delay(150);
   }
   if (!ready) {
+    const nativeExit = child.exitCode;
     await terminate(child);
+    if (bundledBinary)
+      throw new WhisperStartupError(
+        failed
+          ? 'The included Whisper program could not launch. Extract the entire ZIP to a writable folder; check whether Windows security blocked the executable.'
+          : nativeExit !== null
+            ? `The included Whisper program exited during startup (code ${nativeExit}). This Windows preview requires an Intel/AMD x64 CPU with AVX2, FMA and F16C. Save the test report.`
+            : 'The included Whisper model did not finish loading within 60 seconds. Close other demanding apps and retry, or save the test report.',
+      );
     throw new Error(
       failed ||
         `Local Whisper could not start. Check the model and whisper-server installation. ${diagnostics.replaceAll(privatePath, '/[private]')}`,

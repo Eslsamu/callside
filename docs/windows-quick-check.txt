@@ -1,0 +1,30 @@
+CALLSIDE WINDOWS GUIDED TEST
+
+Private preview for Windows 11, Intel/AMD x64 with AVX2, FMA and F16C.
+Allow about 10–15 minutes after the first model load.
+
+Run Callside-Windows-Test-x64.exe to install for your Windows user.
+The app opens automatically; the desktop shortcut opens it again later.
+If using the optional ZIP: extract everything before opening Callside.exe.
+No developer tools, API key, or separate model download is needed.
+Use your own ChatGPT subscription for the optional answer test.
+
+Follow the numbered steps in the app:
+1. Prepare the model and consent to the audio test.
+2. Test the microphone and computer audio; review the text.
+3. Test the recorded conversation. Stay silent during playback, then read
+   the displayed reply. Review speaker labels and missing/duplicated speech.
+4. Include a short test call in your usual app, if someone is available.
+5. Press F8 or Ctrl+Shift+Space while another window is active.
+   Sign in to ChatGPT yourself and request one test suggestion.
+6. Save progress and restart using the app's button.
+7. Download test report: choose where to save the JSON and send it back.
+
+A failed step does not prevent the rest. Save a report even if something fails.
+If installation/start is blocked, send a screenshot instead of changing security
+settings. Do not disable antivirus. Results remain saved when the app closes.
+
+The report contains test text, results and basic system specifications, but
+no audio, usernames, device IDs, keys, accounts or saved templates. Nothing is
+uploaded automatically. Only the answer request sends test text to ChatGPT.
+Use non-private test sentences. Speaker labels are experimental estimates.

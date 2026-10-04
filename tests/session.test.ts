@@ -69,6 +69,8 @@ describe('session data', () => {
     expect(restored.captureMode).toBe('realtime');
     expect(restored).not.toHaveProperty('apiKey');
     expect(restored.backgroundSpeakers).toBe(true);
+    expect(restored.diarizationProvider).toBe('local');
+    expect(restored.transcriptionProvider).toBe('local');
     expect(safeSettings({ backgroundSpeakers: false }, DEFAULT_SETTINGS).backgroundSpeakers).toBe(
       false,
     );

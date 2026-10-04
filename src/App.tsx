@@ -1,3 +1,5 @@
+import { DesktopUpdates } from './DesktopUpdates';
+import { LocalAudioSetup } from './LocalAudioSetup';
 import { ANSWER_MODELS, reasoningOptions } from '../shared/models';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import {
@@ -58,6 +60,7 @@ export default function App({
   const [suggestions, setSuggestions] = useState<Suggestion[]>([]);
   const [requestUsage, setRequestUsage] = useState<RequestUsage[]>([]);
   const [listening, setListening] = useState(false);
+  const [setupBusy, setSetupBusy] = useState(false);
   const [starting, setStarting] = useState(false);
   const [stopping, setStopping] = useState(false);
   const [demo, setDemo] = useState(false);
@@ -461,7 +464,8 @@ export default function App({
   }
 
   async function start() {
-    if (!bootstrap?.hasApiKey) {
+    if (!bootstrap) return;
+    if (settings.transcriptionProvider === 'openai' && !bootstrap.hasApiKey) {
       setView('settings');
       setNotice('Add an OpenAI API key first.');
       return;
@@ -484,7 +488,15 @@ export default function App({
     try {
       const epoch = sessionEpoch.current;
       captureRef.current = await startCapture(
-        safeSettings(settings, DEFAULT_SETTINGS),
+        safeSettings(
+          {
+            ...settings,
+            backgroundSpeakers:
+              settings.backgroundSpeakers &&
+              (settings.diarizationProvider === 'local' || bootstrap.hasApiKey),
+          },
+          DEFAULT_SETTINGS,
+        ),
         bootstrap.token,
         {
           onTranscript: (entry) => {
@@ -627,9 +639,12 @@ export default function App({
                 enabled:
                   settings.captureMode === 'realtime' &&
                   settings.backgroundSpeakers &&
+                  (settings.diarizationProvider === 'local' || Boolean(bootstrap?.hasApiKey)) &&
                   settings.captureSystem &&
                   !demo,
-                batchSeconds: settings.diarizationChunkSeconds,
+                provider: settings.diarizationProvider,
+                batchSeconds:
+                  settings.diarizationProvider === 'local' ? 4 : settings.diarizationChunkSeconds,
                 status: attributionStatus,
               },
               suggestions,
@@ -661,6 +676,9 @@ export default function App({
   }
   const current = suggestions.at(-1);
   const live = listening || starting || stopping;
+  useEffect(() => {
+    void window.callsideDesktop?.setSessionActive?.(live || busy || setupBusy);
+  }, [live, busy, setupBusy]);
   const minutes = `${Math.floor(elapsed / 60)
     .toString()
     .padStart(2, '0')}:${(elapsed % 60).toString().padStart(2, '0')}`;
@@ -741,8 +759,8 @@ export default function App({
       {bootstrap?.chatgpt?.welcomePending && (
         <section className="message notice" role="dialog" aria-label="ChatGPT plan connected">
           <span>
-            You're using your ChatGPT plan for eligible suggestions. Audio still uses API credit.
-            Manage plan limits in ChatGPT Settings.
+            You're using your ChatGPT plan for eligible suggestions. OpenAI audio processing, when
+            enabled, uses API credit. Manage plan limits in ChatGPT Settings.
           </span>
           <button disabled={chatgptBusy} onClick={() => void chatgptAction('welcome')}>
             Got it
@@ -775,7 +793,7 @@ export default function App({
               ) : (
                 <button
                   className="primary-button"
-                  disabled={starting || stopping || !bootstrap}
+                  disabled={starting || stopping || setupBusy || !bootstrap}
                   onClick={() => void start()}
                 >
                   <Mic size={17} />
@@ -815,7 +833,9 @@ export default function App({
                   : settings.captureMode === 'realtime'
                     ? settings.backgroundSpeakers && settings.captureSystem
                       ? 'Live · speaker labels in background'
-                      : 'Live · separate audio channels'
+                      : settings.transcriptionProvider === 'local'
+                        ? 'Local · separate audio channels'
+                        : 'Live · separate audio channels'
                     : `Speaker identification · ${settings.diarizationChunkSeconds}-second chunks`}
               </span>
             )}
@@ -1083,7 +1103,15 @@ export default function App({
           </div>
           <footer className="page-footer">
             <span>
-              {demo ? 'Demo data · no audio recorded' : 'Audio sent to OpenAI · no local recording'}
+              {demo
+                ? 'Demo data · no audio recorded'
+                : settings.transcriptionProvider === 'local'
+                  ? settings.diarizationProvider === 'openai' &&
+                    bootstrap?.hasApiKey &&
+                    settings.captureSystem
+                    ? 'Local transcription · call audio sent to OpenAI for speaker labels'
+                    : 'Local transcription · no audio uploads'
+                  : 'Audio sent to OpenAI · no local recording'}
               <span className="footer-divider">/</span>Transcript kept in this session only
             </span>
           </footer>
@@ -1120,6 +1148,7 @@ export default function App({
               <ArrowRight size={16} />
             </button>
           </div>
+          {window.callsideDesktop && <DesktopUpdates disabled={live || busy || setupBusy} />}
           <div className="settings-grid">
             <section className="settings-section">
               <h2>Connect OpenAI</h2>
@@ -1212,8 +1241,8 @@ export default function App({
                 </select>
               </label>
               <p>
-                ChatGPT suggestions use your plan limits. Live transcription and speaker attribution
-                still use API credit. Subscription requests never fall back to API billing.
+                ChatGPT suggestions use your plan limits. Only audio options set to OpenAI use API
+                credit. Subscription requests never fall back to API billing.
               </p>
               {!bootstrap?.chatgpt?.available ? (
                 <p className="field-help">Open the desktop app to connect ChatGPT.</p>
@@ -1527,45 +1556,111 @@ export default function App({
                   A virtual audio input can replace system audio when your operating system cannot
                   share it directly. Headphones are recommended.
                 </p>
+                <button
+                  className="secondary-button"
+                  onClick={() =>
+                    setSettings((current) => ({
+                      ...current,
+                      answerBilling: 'chatgpt',
+                      transcriptionProvider: 'local',
+                      diarizationProvider: 'local',
+                      backgroundSpeakers: true,
+                      captureMode: 'realtime',
+                    }))
+                  }
+                >
+                  Use local audio + ChatGPT subscription
+                </button>
+                <p className="field-help">
+                  No metered API calls in this configuration. Connect to ChatGPT for suggestions;
+                  your subscription limits apply.
+                </p>
+                {window.callsideDesktop && bootstrap && (
+                  <LocalAudioSetup token={bootstrap.token} disabled={live} onBusy={setSetupBusy} />
+                )}
                 <label>
-                  Transcription mode
+                  Transcription processing
                   <select
-                    value={settings.captureMode}
+                    value={settings.transcriptionProvider}
                     onChange={(e) =>
-                      update('captureMode', e.target.value as Settings['captureMode'])
+                      setSettings((current) => ({
+                        ...current,
+                        transcriptionProvider: e.target.value as Settings['transcriptionProvider'],
+                        captureMode: 'realtime',
+                      }))
                     }
                   >
-                    <option value="realtime">Fast: separate live channels</option>
-                    <option value="diarized">Speaker identification in audio chunks</option>
+                    <option value="local">Local · Whisper</option>
+                    <option value="openai">OpenAI · API key</option>
                   </select>
                 </label>
+                {settings.transcriptionProvider === 'local' && (
+                  <p className="field-help">
+                    Whisper large-v3-turbo runs on this computer. First start downloads a 574 MB
+                    model.{' '}
+                    {window.callsideDesktop
+                      ? 'The desktop app includes the runtime.'
+                      : 'Install whisper.cpp first (macOS: brew install whisper-cpp).'}{' '}
+                    Audio stays local unless OpenAI speaker labeling below is enabled. Suggestions
+                    still send transcript text to your selected answer provider.
+                  </p>
+                )}
+                {settings.transcriptionProvider === 'openai' && (
+                  <label>
+                    Transcription mode
+                    <select
+                      value={settings.captureMode}
+                      onChange={(e) =>
+                        update('captureMode', e.target.value as Settings['captureMode'])
+                      }
+                    >
+                      <option value="realtime">Fast: separate live channels</option>
+                      <option value="diarized">Speaker identification in audio chunks</option>
+                    </select>
+                  </label>
+                )}
                 {settings.captureMode === 'realtime' ? (
                   <>
+                    {settings.transcriptionProvider === 'openai' && (
+                      <label>
+                        Transcription model
+                        <select
+                          value={settings.transcriptionModel}
+                          onChange={(e) => update('transcriptionModel', e.target.value)}
+                        >
+                          <option value="gpt-live-transcribe">gpt-live-transcribe</option>
+                          <option value="gpt-4o-mini-transcribe">gpt-4o-mini-transcribe</option>
+                          <option value="gpt-4o-transcribe">gpt-4o-transcribe</option>
+                        </select>
+                      </label>
+                    )}
                     <label>
-                      Transcription model
+                      Speaker labeling
                       <select
-                        value={settings.transcriptionModel}
-                        onChange={(e) => update('transcriptionModel', e.target.value)}
+                        value={settings.diarizationProvider}
+                        onChange={(e) =>
+                          setSettings((current) => ({
+                            ...current,
+                            diarizationProvider: e.target.value as Settings['diarizationProvider'],
+                            backgroundSpeakers: e.target.value !== 'off',
+                          }))
+                        }
                       >
-                        <option value="gpt-live-transcribe">gpt-live-transcribe</option>
-                        <option value="gpt-4o-mini-transcribe">gpt-4o-mini-transcribe</option>
-                        <option value="gpt-4o-transcribe">gpt-4o-transcribe</option>
+                        <option value="off">Off · microphone / other speaker</option>
+                        <option value="local">Local · LS-EEND (experimental)</option>
+                        <option value="openai" disabled={!bootstrap?.hasApiKey}>
+                          OpenAI · API key
+                        </option>
                       </select>
                     </label>
-                    <label className="checkbox-label">
-                      <input
-                        type="checkbox"
-                        checked={settings.backgroundSpeakers}
-                        onChange={(e) => update('backgroundSpeakers', e.target.checked)}
-                      />
-                      Identify call speakers in the background
-                    </label>
                     <p className="field-help">
-                      Live text and suggestions appear immediately. OpenAI adds speaker labels to
-                      call audio afterward. Your microphone keeps its own label. Headphones prevent
-                      playback from entering your microphone.
+                      Labels arrive in the background without delaying suggestions. Local labeling
+                      supports up to four remote voices. The Mac installer and Windows test package
+                      include the speaker runtime. The Windows test package also includes the model;
+                      on Mac it downloads on first use. Labels are estimates; mixed turns may remain
+                      unassigned. Microphone echo can still cause duplicates without headphones.
                     </p>
-                    {settings.backgroundSpeakers && (
+                    {settings.diarizationProvider === 'openai' && (
                       <>
                         <label>
                           Speaker analysis batch length in seconds

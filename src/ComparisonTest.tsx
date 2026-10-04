@@ -26,17 +26,28 @@ interface EngineState {
   startedAt?: number;
 }
 type EngineStates = Record<ComparisonEngineId, EngineState>;
-const engineNames: Record<ComparisonEngineId, string> = { whisper: 'Whisper', cohere: 'Cohere' };
-const engineIds: ComparisonEngineId[] = ['whisper', 'cohere'];
+const engineNames: Record<ComparisonEngineId, string> = {
+  whisper: 'Whisper',
+  cohere: 'Cohere',
+  openai: 'OpenAI',
+  elevenlabs: 'ElevenLabs',
+};
+const engineIds: ComparisonEngineId[] = ['whisper', 'cohere', 'openai', 'elevenlabs'];
 const emptyEngines = (): EngineStates => ({
   whisper: { model: '', phase: 'waiting', turns: [] },
   cohere: { model: '', phase: 'waiting', turns: [] },
+  openai: { model: 'gpt-live-transcribe', phase: 'waiting', turns: [] },
+  elevenlabs: { model: 'scribe_v2_realtime', phase: 'waiting', turns: [] },
 });
 const seconds = (ms?: number | null) => (ms == null ? '—' : `${(ms / 1000).toFixed(2)} s`);
 const errorText = (error: unknown) => (error instanceof Error ? error.message : String(error));
 
 export default function ComparisonTest() {
   const [token, setToken] = useState('');
+  const [selected, setSelected] = useState<ComparisonEngineId[]>(['whisper', 'cohere']);
+  const [openaiKey, setOpenaiKey] = useState('');
+  const [elevenlabsKey, setElevenlabsKey] = useState('');
+  const [cloudKeys, setCloudKeys] = useState({ openai: false, elevenlabs: false });
   const [ready, setReady] = useState(false);
   const [checking, setChecking] = useState(true);
   const [phase, setPhase] = useState<
@@ -80,6 +91,7 @@ export default function ComparisonTest() {
         const result = await response.json();
         if (!mounted.current) return;
         setToken(bootstrap.token);
+        if (result.cloudKeys) setCloudKeys(result.cloudKeys);
         setReady(Boolean(result.ready));
         setEngines((current) => {
           const next = { ...current };
@@ -149,6 +161,8 @@ export default function ComparisonTest() {
     setEngines((current) => ({
       whisper: { model: current.whisper.model, phase: 'waiting', turns: [] },
       cohere: { model: current.cohere.model, phase: 'waiting', turns: [] },
+      openai: { model: current.openai.model, phase: 'waiting', turns: [] },
+      elevenlabs: { model: current.elevenlabs.model, phase: 'waiting', turns: [] },
     }));
   }
 
@@ -278,7 +292,7 @@ export default function ComparisonTest() {
     clearResults();
     setError('');
     setPhase('running');
-    setStatus('Starting local comparison. Microphone is off.');
+    setStatus('Starting comparison. Microphone is off.');
     try {
       for await (const event of streamComparison<ComparisonEvent>(
         token,
@@ -286,6 +300,7 @@ export default function ComparisonTest() {
         language,
         reference,
         controller.signal,
+        { engines: selected, openaiKey, elevenlabsKey },
       )) {
         if (!mounted.current || controller.signal.aborted || operation !== generation.current)
           return;
@@ -300,7 +315,9 @@ export default function ComparisonTest() {
           continue;
         }
         if (event.type === 'start')
-          setStatus(`Testing ${engineNames[event.engine]} locally. Microphone is off.`);
+          setStatus(
+            `Testing ${engineNames[event.engine]}${event.engine === 'openai' || event.engine === 'elevenlabs' ? ' via API' : ' locally'}. Microphone is off.`,
+          );
         setEngines((current) => {
           const engine = current[event.engine];
           if (event.type === 'start')
@@ -369,7 +386,7 @@ export default function ComparisonTest() {
     );
     const link = document.createElement('a');
     link.href = url;
-    link.download = `callside-cohere-whisper-${report.createdAt.slice(0, 10)}.json`;
+    link.download = `callside-transcription-benchmark-${report.createdAt.slice(0, 10)}.json`;
     link.click();
     setTimeout(() => URL.revokeObjectURL(url), 1000);
   }
@@ -380,12 +397,12 @@ export default function ComparisonTest() {
         <a href="/">
           <ArrowLeft size={16} /> Callside
         </a>
-        <span>Local model comparison</span>
+        <span>Transcription benchmark</span>
       </header>
       <section className="local-test-heading">
-        <h1>Cohere vs. Whisper</h1>
+        <h1>Compare transcription models</h1>
         <p>
-          Record once, then test both models with the same audio. Each model receives a separate
+          Record once, then test selected models with the same audio. Each model receives a separate
           replay at speaking speed so you can compare accuracy and delay.
         </p>
       </section>
@@ -489,6 +506,71 @@ export default function ComparisonTest() {
           <audio controls src={audioUrl} aria-label="Review recorded audio" preload="metadata" />
         </div>
       )}
+      <section className="comparison-providers" aria-label="Models and API keys">
+        <h2>Models to compare</h2>
+        <div className="comparison-model-options">
+          {engineIds.map((id) => (
+            <label key={id}>
+              <input
+                type="checkbox"
+                checked={selected.includes(id)}
+                disabled={busy}
+                onChange={(e) => {
+                  setSelected((current) =>
+                    e.target.checked ? [...current, id] : current.filter((value) => value !== id),
+                  );
+                  clearResults();
+                }}
+              />{' '}
+              {engineNames[id]}{' '}
+              <span>{id === 'openai' || id === 'elevenlabs' ? 'Cloud API' : 'Local'}</span>
+            </label>
+          ))}
+        </div>
+        <div className="comparison-key-fields">
+          {selected.includes('openai') && (
+            <label>
+              OpenAI API key
+              <input
+                type="password"
+                autoComplete="off"
+                spellCheck={false}
+                value={openaiKey}
+                disabled={busy}
+                placeholder={
+                  cloudKeys.openai
+                    ? 'Configured on server; optional override'
+                    : 'Paste OpenAI API key'
+                }
+                onChange={(e) => setOpenaiKey(e.target.value)}
+              />
+            </label>
+          )}
+          {selected.includes('elevenlabs') && (
+            <label>
+              ElevenLabs API key
+              <input
+                type="password"
+                autoComplete="off"
+                spellCheck={false}
+                value={elevenlabsKey}
+                disabled={busy}
+                placeholder={
+                  cloudKeys.elevenlabs
+                    ? 'Configured on server; optional override'
+                    : 'Paste ElevenLabs API key'
+                }
+                onChange={(e) => setElevenlabsKey(e.target.value)}
+              />
+            </label>
+          )}
+        </div>
+        <p>
+          {selected.some((id) => id === 'openai' || id === 'elevenlabs')
+            ? `Running sends this recording to the selected cloud providers. Estimated transcription cost: up to $${((((selected.includes('openai') ? 1.02 : 0) + (selected.includes('elevenlabs') ? 0.39 : 0)) * (audio?.duration ?? 60)) / 3600).toFixed(4)} per run, before taxes. Pasted keys stay in memory for this page and are excluded from reports.`
+            : 'Selected models run locally. No audio is sent to a cloud provider.'}
+        </p>
+      </section>
       <section className="comparison-reference">
         <label htmlFor="comparison-reference">
           Expected transcript <span>Optional · for word error rate</span>
@@ -515,7 +597,14 @@ export default function ComparisonTest() {
         ) : (
           <button
             className="primary-button"
-            disabled={busy || !audio || !ready}
+            disabled={
+              busy ||
+              !audio ||
+              !ready ||
+              !selected.length ||
+              (selected.includes('openai') && !openaiKey.trim() && !cloudKeys.openai) ||
+              (selected.includes('elevenlabs') && !elevenlabsKey.trim() && !cloudKeys.elevenlabs)
+            }
             onClick={() => void run()}
           >
             <Play size={16} />
@@ -523,7 +612,7 @@ export default function ComparisonTest() {
           </button>
         )}
         <p>
-          Allow at least twice the recording length, plus model loading and processing. Audio is
+          Allow one recording-length replay per selected model, plus setup and processing. Audio is
           replayed to the models silently.
         </p>
         <button className="secondary-button" disabled={!report || busy} onClick={download}>
@@ -532,110 +621,122 @@ export default function ComparisonTest() {
         </button>
       </div>
       <section className="comparison-workspace" aria-label="Model results">
-        {engineIds.map((id) => {
-          const engine = engines[id];
-          const last = engine.turns.at(-1)?.measurement;
-          const replaySeconds = engine.startedAt ? Math.max(0, (now - engine.startedAt) / 1000) : 0;
-          const phaseLabel =
-            engine.phase === 'running'
-              ? replaySeconds < (audio?.duration || 0)
-                ? 'Replaying audio'
-                : 'Finishing transcription'
-              : (
-                  {
-                    waiting: 'Waiting',
-                    done: 'Complete',
-                    failed: 'Failed',
-                    cancelled: 'Cancelled',
-                  } as const
-                )[engine.phase];
-          return (
-            <article
-              className="comparison-engine"
-              key={id}
-              aria-label={`${engineNames[id]} results`}
-            >
-              <header className="local-test-pane-title">
-                <h2>{engineNames[id]}</h2>
-                <span className={engine.phase === 'running' ? 'local-live' : ''}>{phaseLabel}</span>
-              </header>
-              <p className="comparison-model">{engine.model || 'Model not connected'}</p>
-              {engine.phase === 'running' && (
-                <div className="comparison-progress">
-                  <progress
-                    max={audio?.duration || 1}
-                    value={Math.min(replaySeconds, audio?.duration || 1)}
-                    aria-label={`${engineNames[id]} replay progress`}
-                  />
-                  <span>{replaySeconds.toFixed(1)} s elapsed</span>
-                </div>
-              )}
-              <div
-                className="local-test-turns comparison-turns"
-                role="log"
-                aria-label={`${engineNames[id]} transcript`}
-                aria-live="polite"
+        {engineIds
+          .filter((id) => selected.includes(id))
+          .map((id) => {
+            const engine = engines[id];
+            const last = engine.turns.at(-1)?.measurement;
+            const replaySeconds = engine.startedAt
+              ? Math.max(0, (now - engine.startedAt) / 1000)
+              : 0;
+            const phaseLabel =
+              engine.phase === 'running'
+                ? replaySeconds < (audio?.duration || 0)
+                  ? 'Replaying audio'
+                  : 'Finishing transcription'
+                : (
+                    {
+                      waiting: 'Waiting',
+                      done: 'Complete',
+                      failed: 'Failed',
+                      cancelled: 'Cancelled',
+                    } as const
+                  )[engine.phase];
+            return (
+              <article
+                className="comparison-engine"
+                key={id}
+                aria-label={`${engineNames[id]} results`}
               >
-                {!engine.turns.length ? (
-                  <div className="comparison-empty">
-                    {engine.phase === 'running'
-                      ? 'Waiting for the first transcript…'
-                      : 'The transcript will appear here.'}
+                <header className="local-test-pane-title">
+                  <h2>{engineNames[id]}</h2>
+                  <span className={engine.phase === 'running' ? 'local-live' : ''}>
+                    {phaseLabel}
+                  </span>
+                </header>
+                <p className="comparison-model">{engine.model || 'Model not connected'}</p>
+                {engine.phase === 'running' && (
+                  <div className="comparison-progress">
+                    <progress
+                      max={audio?.duration || 1}
+                      value={Math.min(replaySeconds, audio?.duration || 1)}
+                      aria-label={`${engineNames[id]} replay progress`}
+                    />
+                    <span>{replaySeconds.toFixed(1)} s elapsed</span>
                   </div>
-                ) : (
-                  engine.turns.map((turn) => (
-                    <article key={turn.id} className={turn.final ? '' : 'local-test-draft'}>
-                      <div>
-                        <span>{turn.final ? 'Final' : 'Draft'}</span>
-                        {turn.measurement && (
-                          <time>{seconds(turn.measurement.speechToTextMs)} delay</time>
-                        )}
-                      </div>
-                      <p>{turn.text || 'No speech recognized in this phrase.'}</p>
-                    </article>
-                  ))
                 )}
-              </div>
-              {engine.error && (
-                <p className="comparison-engine-error" role="alert">
-                  {engine.error}
-                </p>
-              )}
-              <dl className="comparison-metrics">
-                <div>
-                  <dt>First text per phrase</dt>
-                  <dd>{seconds(engine.metrics?.firstTextMs ?? last?.firstTextMs)}</dd>
+                <div
+                  className="local-test-turns comparison-turns"
+                  role="log"
+                  aria-label={`${engineNames[id]} transcript`}
+                  aria-live="polite"
+                >
+                  {!engine.turns.length ? (
+                    <div className="comparison-empty">
+                      {engine.phase === 'running'
+                        ? 'Waiting for the first transcript…'
+                        : 'The transcript will appear here.'}
+                    </div>
+                  ) : (
+                    engine.turns.map((turn) => (
+                      <article key={turn.id} className={turn.final ? '' : 'local-test-draft'}>
+                        <div>
+                          <span>{turn.final ? 'Final' : 'Draft'}</span>
+                          {turn.measurement && (
+                            <time>{seconds(turn.measurement.speechToTextMs)} delay</time>
+                          )}
+                        </div>
+                        <p>{turn.text || 'No speech recognized in this phrase.'}</p>
+                      </article>
+                    ))
+                  )}
                 </div>
-                <div>
-                  <dt>Median final delay</dt>
-                  <dd>{seconds(engine.metrics?.medianFinalDelayMs)}</dd>
-                </div>
-                <div>
-                  <dt>95th percentile final delay</dt>
-                  <dd>{seconds(engine.metrics?.p95FinalDelayMs)}</dd>
-                </div>
-                <div>
-                  <dt>Longest queue wait</dt>
-                  <dd>{seconds(engine.metrics?.maxQueueMs)}</dd>
-                </div>
-                <div>
-                  <dt>Processing / audio</dt>
-                  <dd>
-                    {engine.metrics ? `${engine.metrics.processingToAudioRatio.toFixed(2)}×` : '—'}
-                  </dd>
-                </div>
-                <div>
-                  <dt>Word error rate</dt>
-                  <dd>
-                    {engine.metrics?.wer != null
-                      ? `${(engine.metrics.wer * 100).toFixed(1)}%`
-                      : '—'}
-                  </dd>
-                </div>
-              </dl>
-            </article>
-          );
-        })}
+                {engine.error && (
+                  <p className="comparison-engine-error" role="alert">
+                    {engine.error}
+                  </p>
+                )}
+                <dl className="comparison-metrics">
+                  <div>
+                    <dt>First text per phrase</dt>
+                    <dd>{seconds(engine.metrics?.firstTextMs ?? last?.firstTextMs)}</dd>
+                  </div>
+                  <div>
+                    <dt>Median final delay</dt>
+                    <dd>{seconds(engine.metrics?.medianFinalDelayMs)}</dd>
+                  </div>
+                  <div>
+                    <dt>95th percentile final delay</dt>
+                    <dd>{seconds(engine.metrics?.p95FinalDelayMs)}</dd>
+                  </div>
+                  <div>
+                    <dt>Longest queue wait</dt>
+                    <dd>
+                      {seconds(
+                        id === 'openai' || id === 'elevenlabs' ? null : engine.metrics?.maxQueueMs,
+                      )}
+                    </dd>
+                  </div>
+                  <div>
+                    <dt>Processing / audio</dt>
+                    <dd>
+                      {engine.metrics && id !== 'openai' && id !== 'elevenlabs'
+                        ? `${engine.metrics.processingToAudioRatio.toFixed(2)}×`
+                        : '—'}
+                    </dd>
+                  </div>
+                  <div>
+                    <dt>Word error rate</dt>
+                    <dd>
+                      {engine.metrics?.wer != null
+                        ? `${(engine.metrics.wer * 100).toFixed(1)}%`
+                        : '—'}
+                    </dd>
+                  </div>
+                </dl>
+              </article>
+            );
+          })}
       </section>
       <footer className="local-test-footer comparison-footer">
         <p>
@@ -644,13 +745,14 @@ export default function ComparisonTest() {
           phrase; the completed report shows its median.
         </p>
         <p>
-          Audio stays in memory on this computer. No API key, cloud transcription, or speaker
-          identification. The downloaded JSON contains transcripts, timing measurements, model
-          details, and the reference text; it does not contain audio.
+          Recordings are not saved automatically. Cloud models receive audio only when selected and
+          run. The downloaded JSON contains transcripts, timing measurements, model details, and
+          reference text; it contains no audio or API keys. Reference text is used only for scoring.
         </p>
         <p>
-          This compares Cohere Transcribe with local Whisper, the open model. It does not test the
-          commercial Wispr Flow app.
+          Local models decode repeated snapshots; cloud models use native streaming with the same
+          phrase detector. Cloud processing and queue times are unavailable. This test does not
+          perform speaker identification.
         </p>
       </footer>
     </main>

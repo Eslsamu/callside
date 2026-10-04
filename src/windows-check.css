@@ -1,0 +1,212 @@
+.windows-check {
+  max-width: 800px;
+  margin: 0 auto;
+  padding: 40px 28px 80px;
+}
+.windows-check header {
+  margin-bottom: 32px;
+}
+.check-brand {
+  font-size: 18px;
+  color: var(--accent);
+}
+.windows-check h1 {
+  font-size: 30px;
+  font-weight: 500;
+  margin: 16px 0;
+}
+.windows-check h2 {
+  font-size: 21px;
+  font-weight: 500;
+  margin: 0 0 16px;
+}
+.windows-check h3 {
+  font-size: 17px;
+  font-weight: 500;
+  margin: 0 0 12px;
+}
+.windows-check p {
+  line-height: 1.7;
+  max-width: 70ch;
+}
+.windows-check section {
+  border-top: 1px solid var(--line);
+  padding: 28px 0;
+}
+.windows-check label {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 16px 0;
+}
+.windows-check .checkbox-label {
+  flex-direction: row;
+  align-items: center;
+}
+.windows-check select {
+  max-width: 280px;
+}
+.windows-check blockquote {
+  margin: 16px 0;
+  padding: 16px;
+  background: var(--panel);
+  border-radius: 6px;
+  line-height: 1.7;
+}
+.audio-check {
+  margin-top: 28px;
+}
+.check-transcript {
+  padding: 16px;
+  background: var(--panel);
+  border-radius: 6px;
+  line-height: 1.8;
+}
+.check-actions {
+  display: flex;
+  gap: 12px;
+  margin-top: 12px;
+  flex-wrap: wrap;
+}
+.windows-check progress,
+.windows-check meter {
+  display: block;
+  width: 100%;
+  height: 10px;
+  margin: 16px 0;
+  accent-color: #b5e8cb;
+}
+.check-app-link {
+  display: inline-block;
+  margin-left: 20px;
+  color: #b5e8cb;
+}
+@media (max-width: 600px) {
+  .windows-check {
+    padding: 24px 20px;
+  }
+}
+.windows-check p {
+  margin: 12px 0;
+}
+.windows-check select,
+.windows-check textarea {
+  color: var(--text);
+  background: #1c2520;
+  border: 1px solid #526058;
+  border-radius: 6px;
+  padding: 11px 12px;
+  font: inherit;
+}
+.windows-check textarea {
+  width: 100%;
+  resize: vertical;
+}
+
+.windows-check .check-subheading {
+  margin-top: 32px;
+}
+.windows-check .check-state {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--muted);
+}
+.windows-check .check-state-pass {
+  color: var(--accent);
+}
+.windows-check .check-state-fail,
+.windows-check .check-state-stopped {
+  color: #f6c8b5;
+}
+.windows-check .check-state-running,
+.windows-check .check-state-review {
+  color: #f2c8a4;
+}
+.windows-check .check-errors {
+  color: #f6c8b5;
+  line-height: 1.6;
+  overflow-wrap: anywhere;
+}
+.windows-check .check-recording {
+  background: var(--panel);
+  padding: 16px;
+  margin: 16px 0;
+  border-radius: 6px;
+}
+.windows-check .check-recording > p {
+  font-size: 17px;
+  font-weight: 500;
+}
+.windows-check .check-recording label {
+  margin: 8px 0;
+}
+.windows-check .check-recording meter {
+  margin: 0;
+}
+.windows-check .check-transcript {
+  max-height: 400px;
+  overflow: auto;
+  overflow-wrap: anywhere;
+}
+.windows-check .check-transcript p {
+  margin: 0 0 16px;
+}
+.windows-check .check-transcript p:last-child {
+  margin-bottom: 0;
+}
+.windows-check .check-transcript strong {
+  display: block;
+  color: var(--accent);
+  font-size: 12px;
+  font-weight: 500;
+}
+.windows-check .check-review > p {
+  margin-top: 24px;
+  margin-bottom: 8px;
+}
+.windows-check button[aria-pressed='true'] {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+.windows-check .check-answer {
+  background: var(--panel);
+  padding: 20px;
+  border-radius: 6px;
+  font-size: 24px;
+  line-height: 1.6;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.windows-check .check-summary {
+  padding: 0;
+  list-style: none;
+  margin: 20px 0;
+}
+.windows-check .check-summary li {
+  display: flex;
+  justify-content: space-between;
+  gap: 20px;
+  padding: 10px 0;
+  border-bottom: 1px solid var(--line);
+}
+.windows-check button {
+  min-height: 44px;
+}
+.windows-check .checkbox-label {
+  align-items: flex-start;
+}
+.windows-check .checkbox-label input {
+  margin-top: 4px;
+}
+.windows-check .field-help {
+  color: var(--muted);
+  line-height: 1.7;
+}
+.windows-check select {
+  width: 100%;
+}
+
+.windows-check a {
+  color: var(--accent);
+  text-underline-offset: 3px;
+}

@@ -57,8 +57,19 @@ export function safeSettings(stored: unknown, defaults: Settings): Settings {
     result.reasoningEffort = reasoningOptions(result.model).includes(defaults.reasoningEffort)
       ? defaults.reasoningEffort
       : reasoningOptions(result.model)[0];
+  const saved = stored as Partial<Settings>;
+  result.diarizationProvider = ['off', 'local', 'openai'].includes(saved.diarizationProvider ?? '')
+    ? saved.diarizationProvider!
+    : typeof saved.backgroundSpeakers === 'boolean'
+      ? saved.backgroundSpeakers
+        ? 'openai'
+        : 'off'
+      : 'local';
+  result.backgroundSpeakers = result.diarizationProvider !== 'off';
   result.answerBilling = result.answerBilling === 'chatgpt' ? 'chatgpt' : 'api';
   result.captureMode = result.captureMode === 'diarized' ? 'diarized' : 'realtime';
+  result.transcriptionProvider = result.transcriptionProvider === 'openai' ? 'openai' : 'local';
+  if (result.transcriptionProvider === 'local') result.captureMode = 'realtime';
   const budget = (stored as Record<string, unknown>).maxOutputTokens;
   if (budget === null) result.maxOutputTokens = null;
   else if (typeof budget === 'number' && Number.isFinite(budget))

@@ -1,0 +1,60 @@
+const { build } = require('../package.json');
+module.exports = {
+  ...build,
+  appId: 'org.callside.windows-test',
+  productName: 'Callside Windows Test',
+  artifactName: 'Callside-Windows-Test-${arch}.${ext}',
+  publish: null,
+  directories: { output: '.local/windows-preview' },
+  win: { target: ['nsis', 'zip'], signExecutable: false, executableName: 'Callside' },
+  nsis: {
+    oneClick: true,
+    perMachine: false,
+    allowElevation: false,
+    createDesktopShortcut: true,
+    createStartMenuShortcut: true,
+    shortcutName: 'Callside Windows Test',
+    uninstallDisplayName: 'Callside Windows Test (preview)',
+    deleteAppDataOnUninstall: false,
+  },
+  extraMetadata: {
+    callsideWindowsPreview: true,
+    callsideBuildId: process.env.CALLSIDE_PREVIEW_ID || 'development',
+  },
+  files: [
+    '!node_modules/onnxruntime-web/dist/*jsep*',
+    '!node_modules/onnxruntime-web/dist/*asyncify*',
+    'dist/**/*',
+    'dist-server/**/*',
+    'desktop/**/*.cjs',
+    'desktop/THIRD_PARTY_NOTICES.txt',
+    'desktop/licenses/**/*',
+    'LICENSE',
+    'desktop/bin/windows/**/*',
+    'package.json',
+  ],
+  extraResources: [
+    {
+      from: '.local/windows-diarization',
+      to: 'models/speakers',
+      filter: [
+        'ls_eend_ami_step.onnx',
+        'ls_eend_ami_step.json',
+        'LS-EEND-LICENSE.txt',
+        'frontend-NOTICE.txt',
+        'README.md',
+        'provenance.json',
+      ],
+    },
+    {
+      from: '.local/models/ggml-large-v3-turbo-q5_0.bin',
+      to: 'models/ggml-large-v3-turbo-q5_0.bin',
+    },
+  ],
+  asarUnpack: [
+    ...build.asarUnpack,
+    'node_modules/onnxruntime-web/**/*',
+    'node_modules/onnxruntime-common/**/*',
+  ],
+  extraFiles: [{ from: '.local/windows-test-instructions.txt', to: 'START_HERE_DE.txt' }],
+};

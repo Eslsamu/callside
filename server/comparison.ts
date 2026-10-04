@@ -1,3 +1,4 @@
+import { replayCloudEngine, cloudModels } from './comparison-cloud.js';
 import { createHash } from 'node:crypto';
 import { cpus, totalmem } from 'node:os';
 import { setTimeout as delay } from 'node:timers/promises';
@@ -15,7 +16,7 @@ import { LocalSpeechPipeline, type LocalTurn } from '../src/audio/local.js';
 import { encodeWav } from '../src/audio/dsp.js';
 import { decodeLocalWav } from './local-test-routes.js';
 
-export type ComparisonEngines = Record<ComparisonEngineId, LocalEngine>;
+export type ComparisonEngines = Record<'whisper' | 'cohere', LocalEngine>;
 export const COMPARISON_PROTOCOL =
   'Same PCM16 mono 16 kHz recording; separate warmed, real-time paced replays in alternating order; 50 ms frames; energy VAD; first draft after 1.2 s, updates no sooner than 0.8 s; 0.5 s silence finalizes; 12 s maximum turn; stale drafts coalesced, finals retained; no diarization or postprocessing. Timing is approximate and includes buffering and queueing, but not physical microphone or browser paint latency. Model-specific adaptive draft coalescing can produce different intermediate snapshots.';
 export function wordErrorRate(reference: string, hypothesis: string) {
@@ -143,13 +144,21 @@ export async function replayComparisonEngine(
   };
 }
 
-export function attachComparison(app: Express, engines?: ComparisonEngines) {
+export function attachComparison(
+  app: Express,
+  engines?: ComparisonEngines,
+  getOpenAiKey = () => '',
+) {
   let busy = false,
     sequence = 0;
   const pending = new Set<AbortController>();
   app.get('/api/comparison/status', (_req, res) =>
     res.json({
       ready: Boolean(engines),
+      cloudKeys: {
+        openai: Boolean(getOpenAiKey()),
+        elevenlabs: Boolean(process.env.ELEVENLABS_API_KEY?.trim()),
+      },
       engines: engines
         ? Object.entries(engines).map(([id, e]) => ({ id, model: e.model, details: e.details }))
         : [],
@@ -170,10 +179,33 @@ export function attachComparison(app: Express, engines?: ComparisonEngines) {
         audio: z.string().min(60).max(2560060),
         language: z.enum(['en', 'de']),
         reference: z.string().max(20000).default(''),
+        engines: z
+          .array(z.enum(['whisper', 'cohere', 'openai', 'elevenlabs']))
+          .min(1)
+          .max(4)
+          .optional(),
+        openaiKey: z.string().trim().max(512).default(''),
+        elevenlabsKey: z.string().trim().max(512).default(''),
       })
       .safeParse(req.body);
     if (!parsed.success) {
       res.status(400).json({ error: 'Use up to 60 seconds of audio and English or German.' });
+      return;
+    }
+    const selected = [
+      ...new Set(parsed.data.engines ?? ['whisper', 'cohere']),
+    ] as ComparisonEngineId[];
+    const keys = {
+      openai: parsed.data.openaiKey || getOpenAiKey(),
+      elevenlabs: parsed.data.elevenlabsKey || process.env.ELEVENLABS_API_KEY?.trim() || '',
+    };
+    const missing = selected.find((id) => (id === 'openai' || id === 'elevenlabs') && !keys[id]);
+    if (missing) {
+      res
+        .status(400)
+        .json({
+          error: `Add a ${missing === 'openai' ? 'OpenAI' : 'ElevenLabs'} API key before running this model.`,
+        });
       return;
     }
     let audio: Buffer;
@@ -212,7 +244,9 @@ export function attachComparison(app: Express, engines?: ComparisonEngines) {
       audioSha256: createHash('sha256').update(audio).digest('hex'),
       audioMs: samples.length / 16,
       reference: parsed.data.reference,
-      protocol: COMPARISON_PROTOCOL,
+      protocol:
+        COMPARISON_PROTOCOL +
+        ' Cloud engines use native streaming with the same local VAD/manual commits; no repeated snapshots. Connection setup is reported separately. Cloud compute/queue times are unavailable (zero placeholders). Reference text is used only for scoring and never sent to providers.',
       hardware: {
         platform: process.platform,
         arch: process.arch,
@@ -222,21 +256,32 @@ export function attachComparison(app: Express, engines?: ComparisonEngines) {
       },
       results: [],
     };
-    const order: ComparisonEngineId[] =
-      sequence++ % 2 ? ['cohere', 'whisper'] : ['whisper', 'cohere'];
+    const rotation = sequence++ % selected.length;
+    const order = [...selected.slice(rotation), ...selected.slice(0, rotation)];
     try {
       for (const engine of order) {
         abort.signal.throwIfAborted();
-        emit({ type: 'start', engine, model: engines[engine].model });
-        const result = await replayComparisonEngine(
-          engine,
-          engines[engine],
-          samples,
-          parsed.data.language,
-          parsed.data.reference,
-          abort.signal,
-          emit,
-        );
+        const cloud = engine === 'openai' || engine === 'elevenlabs';
+        emit({ type: 'start', engine, model: cloud ? cloudModels[engine] : engines[engine].model });
+        const result = cloud
+          ? await replayCloudEngine(
+              engine,
+              keys[engine],
+              samples,
+              parsed.data.language,
+              parsed.data.reference,
+              abort.signal,
+              emit,
+            )
+          : await replayComparisonEngine(
+              engine,
+              engines[engine],
+              samples,
+              parsed.data.language,
+              parsed.data.reference,
+              abort.signal,
+              emit,
+            );
         report.results.push(result);
         emit({
           type: 'done',
@@ -251,7 +296,7 @@ export function attachComparison(app: Express, engines?: ComparisonEngines) {
         emit({
           type: 'error',
           message:
-            'Comparison timed out before both models finished. No complete report is available.',
+            'Comparison timed out before all selected models finished. No complete report is available.',
         });
       else if (!abort.signal.aborted)
         emit({

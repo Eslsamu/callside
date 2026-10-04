@@ -10,9 +10,12 @@ flowchart LR
   PCM --> VAD[Speech boundary detection]
   VAD --> Realtime[Local WebSocket bridge]
   VAD --> Blocks[Local diarization endpoint]
-  Realtime --> OpenAI[OpenAI transcription]
-  Blocks --> OpenAI
-  OpenAI --> Transcript[Transcript in UI memory]
+  Realtime --> Whisper[Local Whisper by default]
+  Realtime --> OpenAI[Optional OpenAI transcription]
+  Blocks --> Speakers[Local LS-EEND or optional OpenAI attribution]
+  Whisper --> Transcript[Transcript in UI memory]
+  OpenAI --> Transcript
+  Speakers --> Transcript
   Transcript --> Trigger[Button, keyboard, typed question, or automatic rule]
   Trigger --> Answer[Local answer endpoint]
   Answer --> Responses[OpenAI Responses API]
@@ -63,7 +66,7 @@ There are three distinct capabilities to implement when adding a provider:
 
 Start with the backend provider interface and existing OpenAI implementation. Add a server-side provider implementation, register it in the server composition, and add settings only for capabilities it supports. Keep credentials in the server and preserve the client-facing event contract. Add tests using provider fakes that cover success, provider failure, stream cancellation, and silent automatic responses.
 
-An answer-only provider can reuse OpenAI transcription. A transcription-only provider can reuse OpenAI answers. Do not require one vendor to supply all three capabilities. Desktop suggestions also support the official ChatGPT plan OAuth flow through `server/chatgpt-auth.ts`. The loopback callback validates state, PKCE, ID-token signature/issuer/audience/expiry/nonce, and plan scope. Account credentials are encrypted by Electron safeStorage, refreshed with rotation, and never sent to the renderer. The Responses provider uses the OAuth bearer with `store:false` and streaming; it omits API-only controls. Audio always uses the independent API provider. Subscription failures never fall back to API billing.
+An answer-only provider can reuse OpenAI transcription. A transcription-only provider can reuse OpenAI answers. Do not require one vendor to supply all three capabilities. Desktop suggestions also support the official ChatGPT plan OAuth flow through `server/chatgpt-auth.ts`. The loopback callback validates state, PKCE, ID-token signature/issuer/audience/expiry/nonce, and plan scope. Account credentials are encrypted by Electron safeStorage, refreshed with rotation, and never sent to the renderer. The Responses provider uses the OAuth bearer with `store:false` and streaming; it omits API-only controls. Audio uses independently selected local or API providers; subscription billing applies only to suggestions. Subscription failures never fall back to API billing.
 
 ## Persistence and hosting
 

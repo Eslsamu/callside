@@ -10,7 +10,7 @@ export interface TranscriptEntry {
   /** Original live turn ID, shared by any fragments created by attribution. */
   turnId?: string;
   speakerId?: string;
-  attribution?: 'reference' | 'chunk';
+  attribution?: 'reference' | 'chunk' | 'local';
   final: boolean;
 }
 export interface SpeakerReference {
@@ -23,7 +23,7 @@ export interface SpeakerSegment {
   endTimestamp: number;
   speaker: string;
   speakerId: string;
-  attribution: 'reference' | 'chunk';
+  attribution: 'reference' | 'chunk' | 'local';
   text: string;
 }
 export interface SpeakerAttribution {
@@ -39,6 +39,7 @@ export interface Settings {
   reasoningEffort: import('./models.js').ReasoningEffort;
   fastMode: boolean;
   transcriptionModel: string;
+  transcriptionProvider: 'local' | 'openai';
   language: string;
   systemPrompt: string;
   autoPrompt: string;
@@ -51,6 +52,7 @@ export interface Settings {
   captureMic: boolean;
   captureSystem: boolean;
   filterMicrophoneEcho: boolean;
+  diarizationProvider: 'off' | 'local' | 'openai';
   backgroundSpeakers: boolean;
   micDeviceId: string;
   systemDeviceId: string;

@@ -2,7 +2,7 @@
 
 Small, reviewable contributions are welcome. Explain the user problem, the resulting behavior, and how you verified the change. For larger changes, discuss the intended approach in an issue first.
 
-See the [roadmap](docs/ROADMAP.md) for current priorities and [community conduct](CODE_OF_CONDUCT.md) for participation guidelines. While the repository is private, contributors need access from the owner; the public fork-and-pull-request workflow applies after publication.
+See the [roadmap](docs/ROADMAP.md) for current priorities and [community conduct](CODE_OF_CONDUCT.md) for participation guidelines. Fork the repository and open a pull request. Changes to main require review and passing CI.
 
 ## Contribution workflow
 
@@ -11,6 +11,7 @@ See the [roadmap](docs/ROADMAP.md) for current priorities and [community conduct
 3. Use synthetic data and the demo to develop without paid API calls.
 4. Run the relevant checks below and describe their limits in the pull request.
 5. Update documentation when setup, costs, permissions, or behavior change.
+6. Add user-visible changes under **Unreleased** in CHANGELOG.md. Do not bump the version or build installers for individual changes; see [the release policy](docs/RELEASING.md).
 
 Documentation corrections, accessibility improvements, regression tests, and reproducible platform reports are useful first contributions. Please avoid promotional text in the application UI. Discoverability and product comparisons belong in the README and documentation, with sources and honest limits.
 

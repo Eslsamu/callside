@@ -6,11 +6,20 @@ Callside is an MIT-licensed desktop call copilot. It transcribes microphone and 
 
 It is a free, open-source alternative to Cluely for live conversation assistance. See the [comparison section](#an-alternative-to-cluely-final-round-ai-and-lockedin-ai) for differences and limitations.
 
-**The software is free. OpenAI API usage is paid separately through your own API account.** There is no Callside subscription, license fee, or account requirement. Live cloud transcription and background speaker attribution incur API charges. Suggestions can use your ChatGPT plan or API credit. The built-in demo is free and needs no API key.
+**The software is free.** There is no Callside subscription, license fee, or account requirement. Local transcription and local speaker labeling need no API key. Suggestions can use an eligible ChatGPT plan or paid OpenAI API credit; optional cloud transcription and cloud speaker attribution incur separate API charges. The built-in demo needs no account or API key.
 
-[Quick start](#quick-start) · [Compare alternatives](docs/ALTERNATIVES.md) · [Contributing](CONTRIBUTING.md) · [Roadmap](docs/ROADMAP.md) · [MIT license](LICENSE)
+[Quick start](#quick-start) · [Compare alternatives](docs/ALTERNATIVES.md) · [Contributing](CONTRIBUTING.md) · [Roadmap](docs/ROADMAP.md) · [MIT license](LICENSE) · [Third-party notices](docs/THIRD_PARTY.md)
 
 ![Callside demo showing a live transcript, contextual suggestion, and the Help now keyboard shortcut](docs/assets/callside-demo.png)
+
+## macOS installer
+
+**Public downloads currently contain source code only.** No signed/notarized installer is published yet. For an explicitly built local Apple Silicon test DMG, drag Callside into Applications and launch it there.
+The installer bundles the local audio runtimes. Use **Settings → Audio sources → Download and prepare models**
+before your first call; no developer tools are needed on the installed Mac.
+
+The current local installer is not Apple-notarized yet. Public signing and the public update feed
+remain release prerequisites. See [installation, builds, and updates](docs/macos-installer.md).
 
 ## How it works without typing
 
@@ -28,7 +37,7 @@ The [comparison guide](docs/ALTERNATIVES.md) links to those products' official d
 
 ## Project status
 
-Early-stage software. The repository is initially private while being prepared for public release; the code is MIT-licensed. macOS Apple Silicon has been used for desktop testing. Windows and Linux packaging targets exist, but their capture paths need broader real-device testing. Build from source with the commands below; signed installers are not currently provided.
+Early-stage software. The code is MIT-licensed. macOS Apple Silicon has been used for desktop testing. Windows and Linux packaging targets exist, but their capture paths need broader real-device testing. Build from source with the commands below; signed installers are not currently provided.
 
 ## What it does
 
@@ -43,7 +52,7 @@ Early-stage software. The repository is initially private while being prepared f
 
 ## Run it
 
-Use **Node.js 22.12 or later** and npm. While the repository is private, you need GitHub access to clone it.
+Use **Node.js 22.12 or later** and npm.
 
 ```sh
 git clone https://github.com/Eslsamu/callside.git
@@ -54,7 +63,44 @@ npm run dev
 
 Open the local address printed in the terminal. Choose the demo to try the complete transcript and suggestion flow without an account.
 
-For a real call, enter an [OpenAI Platform API key](https://platform.openai.com/api-keys) in the app settings. The key stays in the local server's memory for that process. Alternatively, copy `.env.example` to `.env` and set `OPENAI_API_KEY` there. `.env` is ignored by Git. Restart the server after changing environment variables.
+For a real call, transcription defaults to **Local · Whisper** and needs no API key.
+Install whisper.cpp first (`brew install whisper-cpp` on macOS); the first start
+downloads the 574 MB large-v3-turbo Q5 model. Desktop builds store models in their
+application data folder. Other platforms can set `WHISPER_SERVER_BIN` and
+`WHISPER_MODEL_PATH` to a compatible whisper.cpp server and model.
+
+For audio processing without API charges, install the local speaker runtime on
+Apple Silicon (macOS 14+, Xcode/Swift required):
+
+```sh
+npm run local:speakers:setup
+```
+
+In **Settings → Audio sources**, choose **Use local audio + ChatGPT subscription**,
+then connect your ChatGPT account in settings. This selects local Whisper,
+local LS-EEND speaker labeling, and subscription suggestions. Model weights
+download on first use. There is no automatic cloud or API-billing fallback.
+
+**Speaker labeling** has three independent choices:
+
+- **Off:** microphone / other speaker only.
+- **Local · LS-EEND (experimental):** CPU processing with up to four remote voices.
+  Labels arrive in the background without delaying suggestions. Ambiguous turns
+  remain unassigned or show multiple speakers. This is not verified identity recognition.
+- **OpenAI:** sends call audio to gpt-4o-transcribe-diarize and incurs API charges.
+
+Normal source setup for local speaker labeling currently supports Apple Silicon Macs.
+An experimental Windows preview bundles a portable CPU runtime; it still needs real-device
+validation. See [Windows testing](docs/windows-testing.md). Other source setups can
+turn speaker labeling off or select OpenAI. Build the runtime before packaging a macOS release;
+the executable and its FluidAudio license are included in the desktop package.
+FluidAudio is pinned in the native Swift package and uses the Apache 2.0 license.
+
+Suggestions send transcript/context text to your selected provider. ChatGPT plan
+limits still apply; local audio does not make answer generation offline. Headphone-free
+microphone echo can still cause duplicate text or incorrect attribution.
+
+For OpenAI features, enter an [OpenAI Platform API key](https://platform.openai.com/api-keys) in the app settings. Alternatively, copy `.env.example` to `.env` and set `OPENAI_API_KEY` there. `.env` is ignored by Git. Restart the server after changing environment variables.
 
 To use the desktop window and global shortcut:
 
@@ -72,7 +118,7 @@ npm start
 ### Quick start
 
 1. Run `npm ci` and `npm run dev`, then open the local address shown.
-2. Select **Try demo**. For real calls, add an OpenAI API key in **Settings**.
+2. Select **Try demo**, or install whisper.cpp for local calls. Add an OpenAI API key only for cloud audio features or API-billed suggestions.
    In the desktop app, leave **Remember API key on this device** checked and click **Save API key** to reuse it after restarting. **Remove API key** clears the saved key and the current session key. Browser users can set `OPENAI_API_KEY` in a local `.env` file.
 3. Choose your model, prompts, context, microphone, and call audio.
 4. Let everyone know about transcription, then start the call and grant audio permissions.
@@ -92,17 +138,26 @@ Credentials are encrypted using the OS key store and refreshed automatically. Yo
 
 In subscription mode, custom output caps, priority/Fast mode, and explicit cache controls are omitted. Reasoning strength, reference material, streamed suggestions, and automatic triggers remain available. Account-specific GPT-6 model availability comes from OpenAI; a subscription does not guarantee access to every model. The built-in demo stays synthetic and does not test your subscription connection.
 
-The defaults are `gpt-live-transcribe` for live transcription, `gpt-4o-transcribe-diarize` for the diarization mode, and `gpt-6-luna` for tasks. Access depends on your API project. Task models are restricted to GPT-6 Luna, GPT-6 Sol, GPT-6.1 Sol, and GPT-6 Astra. Reasoning strength is configurable: None, Low, Medium, High, Extra high, or Maximum; Astra and GPT-6.1 Sol start at Low. Fast mode requests priority processing where available at 2× standard token rates. It is off by default. The output budget includes both reasoning and visible answer tokens. Check [OpenAI API pricing](https://developers.openai.com/api/docs/pricing) and your project limits before a long call. Automatic mode can make repeated model requests, including requests whose result is silence.
+New settings default to local Whisper transcription, experimental local LS-EEND speaker labeling, and `gpt-6-luna` with no reasoning for tasks. API billing is initially selected for suggestions; connect ChatGPT and choose subscription billing to use your plan. When you select cloud audio, the models are `gpt-live-transcribe` for live transcription and `gpt-4o-transcribe-diarize` for diarization. Access depends on your API project. Task models are restricted to GPT-6 Luna, GPT-6 Sol, GPT-6.1 Sol, and GPT-6 Astra. Reasoning strength is configurable: None, Low, Medium, High, Extra high, or Maximum; Astra and GPT-6.1 Sol start at Low. Fast mode requests priority processing where available at 2× standard token rates. It is off by default. The output budget includes both reasoning and visible answer tokens. Check [OpenAI API pricing](https://developers.openai.com/api/docs/pricing) and your project limits before a long call. Automatic mode can make repeated model requests, including requests whose result is silence.
 
 ## Choosing an audio mode
 
-| Mode                                        | Speaker labels                                                                                                    | Tradeoff                                                                                                   |
-| ------------------------------------------- | ----------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------- |
-| Live + background speakers (default)        | Live text first, then Speaker 1–4 labels linked using voice reference clips. Your microphone keeps its own label. | Suggestions do not wait for attribution. Adds a paid diarization pass over call audio.                     |
-| Live transcription, background speakers off | Microphone and system audio have independent labels, such as “Me” and “Other speaker.”                            | Useful for one-to-one calls. Everyone on system audio shares its label.                                    |
-| Speaker diarization                         | OpenAI distinguishes speakers within each short audio block.                                                      | Adds block buffering and request latency. Speaker IDs are scoped to a block and can change between blocks. |
+| Mode                                     | Speaker labels                                                  | Tradeoff                                                                  |
+| ---------------------------------------- | --------------------------------------------------------------- | ------------------------------------------------------------------------- |
+| Local Whisper + local speakers (default) | Experimental LS-EEND labels arrive in the background.           | Local model/runtime setup required; audio stays on the computer.          |
+| Live transcription + speakers off        | Microphone and system audio have separate source labels.        | All remote participants share the call-audio label.                       |
+| Live transcription + OpenAI speakers     | Background labels linked using temporary voice reference clips. | Sends call audio to OpenAI and adds API charges.                          |
+| OpenAI speaker diarization               | Transcription and labels returned in short audio blocks.        | Adds buffering and request latency; identities may change between blocks. |
 
-In **Fast: separate live channels**, **Identify call speakers in the background** is enabled by default. The same captured call audio is also analyzed by `gpt-4o-transcribe-diarize` in 12-second batches with up to two seconds of overlap. Existing saved batch lengths are retained. Text and suggestions appear before labels are available. Background results update or split existing transcript turns while preserving the original live wording; they do not append a second transcript or trigger an automatic hint again for the same live turn. Corrected labels are used by later answers and exports.
+Transcription and background speaker labeling are independent settings. Local and
+OpenAI background results update existing turns without delaying suggestions or
+adding a duplicate transcript. Recent speech can remain pending. Corrected labels
+are used by subsequent answers and exports. Local labels are experimental; they
+do not establish a participant's real identity.
+
+When **OpenAI** background labeling is selected, call audio is analyzed in
+12-second batches with up to two seconds of overlap. Existing saved batch lengths
+are retained. The following reference-clip behavior applies to OpenAI labeling:
 
 Clean, non-overlapping voice clips of 2–6 seconds are kept in capture memory for up to four remote speakers and sent as OpenAI known-speaker references in later requests. This links generic Speaker 1–4 labels between batches, but is not a guarantee of identity. Short or overlapping voices without a clean clip, and additional voices beyond the reference limit, remain visibly scoped to their batch. Reference clips are cleared at the end of capture and excluded from templates and exports. Callside does not infer real names or enroll permanent voiceprints.
 
@@ -142,7 +197,7 @@ Session JSON exports include `requestUsage` for completed requests and intention
 
 ## Privacy and boundaries
 
-The app and its server run locally. Selected audio and relevant transcript/context are sent to OpenAI when you use an API session. The separate local Whisper microphone test processes audio entirely on your computer. Demo mode uses local fixtures.
+The app and its server run locally. Local Whisper and local speaker labeling process audio on this computer. Selecting OpenAI audio sends the relevant audio to OpenAI. Suggestions send transcript text, instructions, and reference material to OpenAI through the selected API or ChatGPT connection, even when audio processing is local. The comparison page sends audio to each cloud provider you explicitly select. Demo mode uses local fixtures.
 
 - API keys are held in server memory and are not returned to the renderer. Desktop users can explicitly remember a key using OS-backed encryption in app data outside the repository. Browser/session-only keys are not persisted by the UI.
 - The server listens on loopback. Keep it local; this is not a multi-user hosted service.
@@ -165,8 +220,8 @@ npm run check
 `npm run test:desktop` separately checks the production Electron shell, preload bridge, and IPC in a hidden window with an isolated temporary profile. It uses demo data, sends the answer shortcut's IPC event, and skips actual global-key registration and real audio capture.
 
 ```sh
-npm run desktop:pack   # unpacked app for the current platform
-npm run desktop:dist   # installer/archive for the current platform
+npm run desktop:pack   # unpacked development preview; no installer
+npm run desktop:dist -- --version <version>   # explicit release only
 ```
 
 ### Numbered releases
@@ -188,7 +243,7 @@ Build distributable desktop packages on the target OS. Public macOS and Windows 
 
 ### Optional local transcription experiment
 
-Run `npm run local:test` for a separate microphone test with local Whisper and approximate latency measurements. See [the local setup guide](docs/local-transcription-test.md). It downloads a model on first use and processes speech locally. This experiment does not replace the full app's API-based call assistance.
+Run `npm run local:test` for a separate microphone test with local Whisper and approximate latency measurements. See [the local setup guide](docs/local-transcription-test.md). It downloads a model on first use and processes speech locally. The full app also offers local transcription in its audio settings.
 
 ## Questions and contributions
 

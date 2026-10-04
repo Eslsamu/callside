@@ -6,3 +6,10 @@ release
 .impeccable
 playwright-report
 test-results
+
+.local
+experiments
+native/diarization/.build
+desktop/bin
+public/licenses
+native/windows/licenses

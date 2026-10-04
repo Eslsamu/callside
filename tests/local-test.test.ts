@@ -10,6 +10,54 @@ afterEach(async () => {
 });
 
 describe('local Whisper test boundary', () => {
+  it('serializes live microphone and call requests without a cloud key', async () => {
+    let running = 0;
+    let peak = 0;
+    const server = await startServer({
+      port: 0,
+      apiOnly: true,
+      apiKey: '',
+      providerFactory: () => {
+        throw new Error('Cloud access forbidden');
+      },
+      localEngine: {
+        model: 'fixture',
+        async transcribe() {
+          running++;
+          peak = Math.max(peak, running);
+          await new Promise((resolve) => setTimeout(resolve, 15));
+          running--;
+          return { text: 'Local speech', processingMs: 15 };
+        },
+      },
+    });
+    servers.push(server);
+    const bootstrap = await fetch(`${server.url}/api/bootstrap`).then((r) => r.json());
+    const headers = { 'Content-Type': 'application/json', 'X-Callside-Token': bootstrap.token };
+    const post = (path: string, body: unknown) =>
+      fetch(server.url + path, { method: 'POST', headers, body: JSON.stringify(body) });
+    expect((await post('/api/local/prepare', {})).status).toBe(200);
+    const body = {
+      audio: Buffer.from(encodeWav(new Int16Array(16000), 16000)).toString('base64'),
+      language: 'auto',
+    };
+    const responses = await Promise.all([
+      post('/api/local/transcribe', body),
+      post('/api/local/transcribe', body),
+    ]);
+    expect(responses.map((r) => r.status)).toEqual([200, 200]);
+    expect(peak).toBe(1);
+    expect((await post('/api/local/transcribe', { ...body, audio: 'invalid' })).status).toBe(400);
+    expect(
+      (
+        await fetch(`${server.url}/api/local/prepare`, {
+          method: 'POST',
+          headers: { ...headers, Origin: 'https://untrusted.example' },
+          body: '{}',
+        })
+      ).status,
+    ).toBe(403);
+  });
   it('transcribes without constructing a cloud provider, and keeps timing history free of transcript text', async () => {
     const transcribe = vi.fn(async () => ({ text: 'A local phrase', processingMs: 123 }));
     const server = await startServer({

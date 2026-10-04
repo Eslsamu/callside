@@ -211,7 +211,7 @@ export class ChatGPTAuth {
         }
         this.models = [];
         res.end(
-          'ChatGPT connected. Return to Callside. Transcription still uses your separate API key.',
+          'ChatGPT connected. Return to Callside. Audio processing uses your selected transcription settings.',
         );
       } catch (error) {
         this.error =

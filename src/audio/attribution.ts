@@ -67,6 +67,38 @@ export class SpeakerAttributionOverlay {
     const batches = [...this.batches.values()]
       .filter((batch) => batch.timestamp < end && batch.endTimestamp > entry.timestamp)
       .sort((a, b) => a.receivedAt - b.receivedAt);
+    // Local diarization provides time regions, not words. Assign only a dominant
+    // voice across the whole measured turn; never invent word-level alignment.
+    const local = [...batches].reverse().find(
+      (batch) =>
+        batch.segments.some((segment) => segment.attribution === 'local') &&
+        // Worklet and VAD clocks can differ slightly at a phrase boundary.
+        // Keep the same small tolerance used by word-aligned attribution;
+        // actual speaker overlap still has to pass the dominance checks.
+        batch.timestamp <= entry.timestamp + 250 &&
+        batch.endTimestamp >= end - 250,
+    );
+    if (local) {
+      const coverage = new Map<string, { segment: SpeakerSegment; duration: number }>();
+      for (const segment of local.segments) {
+        const duration = Math.max(
+          0,
+          Math.min(end, segment.endTimestamp) - Math.max(entry.timestamp, segment.timestamp),
+        );
+        if (!duration) continue;
+        const old = coverage.get(segment.speakerId);
+        coverage.set(segment.speakerId, { segment, duration: (old?.duration ?? 0) + duration });
+      }
+      const voices = [...coverage.values()].sort((a, b) => b.duration - a.duration);
+      const duration = Math.max(1, end - entry.timestamp);
+      if (voices[0]?.duration / duration >= 0.65 && (voices[1]?.duration ?? 0) / duration <= 0.2) {
+        const { speaker, speakerId } = voices[0].segment;
+        return [{ ...entry, speaker, speakerId, attribution: 'local' }];
+      }
+      if (voices.length > 1)
+        return [{ ...entry, speaker: 'Multiple speakers · local', attribution: 'local' }];
+      return [entry];
+    }
     for (const batch of batches) {
       for (const segment of batch.segments) {
         if (segment.timestamp >= end || segment.endTimestamp <= entry.timestamp) continue;

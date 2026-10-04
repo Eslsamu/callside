@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { TranscriptReconciler } from '../src/audio/reconcile';
-import type { TranscriptEntry } from '../shared/types';
+import type { SpeakerAttribution, TranscriptEntry } from '../shared/types';
 
 function entry(
   id: string,
@@ -11,6 +11,59 @@ function entry(
 ): TranscriptEntry {
   return { id, source, text, timestamp, final, speaker: source === 'mic' ? 'Me' : 'Other speaker' };
 }
+
+describe('local speaker boundary alignment', () => {
+  const attribution = (start: number, end: number): SpeakerAttribution => ({
+    chunkId: 'local-window',
+    timestamp: start,
+    endTimestamp: end,
+    receivedAt: 6000,
+    segments: [
+      {
+        timestamp: start,
+        endTimestamp: end,
+        speaker: 'Speaker 1 · local',
+        speakerId: 'local-1',
+        attribution: 'local',
+        text: '',
+      },
+    ],
+  });
+  it('labels a dominant voice despite up to 250 ms of VAD/worklet boundary skew', () => {
+    const reconciler = new TranscriptReconciler();
+    reconciler.accept({
+      ...entry('system:1', 'system', 'A complete measured phrase.'),
+      endTimestamp: 5000,
+    });
+    reconciler.attribute(attribution(1250, 4750));
+    expect(reconciler.view().entries[0]).toMatchObject({
+      speaker: 'Speaker 1 · local',
+      speakerId: 'local-1',
+      attribution: 'local',
+      text: 'A complete measured phrase.',
+    });
+  });
+  it.each([
+    [1251, 5000],
+    [1000, 4749],
+    [1000, 3000],
+  ])('keeps uncovered or still-pending speech unassigned (%d–%d)', (from, through) => {
+    const reconciler = new TranscriptReconciler();
+    reconciler.accept({
+      ...entry('system:1', 'system', 'A complete measured phrase.'),
+      endTimestamp: 5000,
+    });
+    reconciler.attribute(attribution(from, through));
+    expect(reconciler.view().entries[0]).toMatchObject({ speaker: 'Other speaker' });
+    expect(reconciler.view().entries[0].attribution).toBeUndefined();
+  });
+  it('does not label a provisional phrase without an end timestamp', () => {
+    const reconciler = new TranscriptReconciler();
+    reconciler.accept(entry('system:1', 'system', 'An unfinished phrase', 1000, false));
+    reconciler.attribute(attribution(1000, 5000));
+    expect(reconciler.view().entries[0].attribution).toBeUndefined();
+  });
+});
 describe('cross-channel microphone echo', () => {
   it.each([true, false])(
     'keeps the system speaker regardless of arrival order: system first=%s',

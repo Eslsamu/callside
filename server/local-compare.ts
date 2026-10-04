@@ -41,11 +41,10 @@ try {
     throw new Error('Invalid LOCAL_COMPARE_PORT.');
   server = await startServer({
     port,
-    apiKey: '',
     comparisonEngines: { whisper, cohere },
     production: process.env.NODE_ENV === 'production',
   });
-  console.log(`Cohere vs Whisper test ready: ${server.url}/local-compare`);
+  console.log(`Transcription benchmark ready: ${server.url}/local-compare`);
   console.log(
     'Record once, stop, then compare the same recording. Keep this process running. Ctrl+C unloads both models.',
   );

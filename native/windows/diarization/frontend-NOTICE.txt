@@ -1,0 +1,15 @@
+The LS-EEND frontend follows the MIT-licensed reference algorithms from:
+
+Audio-WestlakeU/FS-EEND (LS-EEND)
+Copyright (c) 2023 Audio-WestlakeU
+
+EEND audio feature extraction
+Copyright 2019 Hitachi, Ltd. (author: Yusuke Fujita)
+
+GradientDescent2718/LS-EEND-ONNX reference streaming frontend
+Model/export revision cc40a1e1242c148fbbc15c132e43b8ac15056e53
+https://huggingface.co/GradientDescent2718/LS-EEND-ONNX
+Published under the MIT license. See LS-EEND-LICENSE.txt.
+
+ONNX Runtime Web is distributed under its accompanying MIT license and third
+party notices in the onnxruntime-web package.

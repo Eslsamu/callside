@@ -21,3 +21,8 @@ template.json
 # Local Python runtime caches
 __pycache__/
 *.pyc
+native/diarization/.build/
+desktop/bin/
+
+# Unrelated local business experiments (not part of Callside)
+/experiments/

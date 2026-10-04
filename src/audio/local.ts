@@ -21,6 +21,8 @@ export interface LocalTurn {
   text: string;
   final: boolean;
   measurement?: LocalMeasurement;
+  startedAt?: number;
+  endedAt?: number;
 }
 interface Callbacks {
   onTurn(turn: LocalTurn): void;
@@ -89,7 +91,7 @@ export class LocalSpeechPipeline {
     } else this.queue.push(job);
     if (this.queue.filter((item) => item.final).length > 4) {
       this.fail(
-        'The local model cannot keep up on this device. The test stopped. Try a smaller local model.',
+        'The local model cannot keep up on this device. Recording stopped. Try fewer audio sources or a smaller local model.',
       );
       return;
     }
@@ -140,7 +142,14 @@ export class LocalSpeechPipeline {
           firstTextMs: this.firstText.get(job.id)!,
         };
       }
-      this.callbacks.onTurn({ id: job.id, text, final: job.final, measurement });
+      this.callbacks.onTurn({
+        id: job.id,
+        text,
+        final: job.final,
+        measurement,
+        startedAt: job.startedAt,
+        endedAt: job.startedAt + job.audio.length / 16,
+      });
       if (job.final) this.firstText.delete(job.id);
     } catch (error) {
       if (!this.abort.signal.aborted)

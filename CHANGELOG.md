@@ -2,8 +2,33 @@
 
 ## Unreleased
 
+- Prepare the public source repository with current local/cloud documentation, third-party notices, and contributor/security guidance.
+
+- Add a private Windows x64 test installer with bundled Whisper and portable CPU speaker labeling, a guided simultaneous-audio and ChatGPT test, checkpoint recovery, restart verification, and a privacy-limited diagnostic report.
+- Verify portable LS-EEND with a licensed four-speaker fixture and preserve local-only audio processing without extra runtime setup.
+
+- Separate unpacked development previews from explicitly versioned installer releases.
+
+## 0.6.0 - 2026-10-03
+
+- Add an Apple Silicon DMG with drag-to-Applications installation.
+- Bundle pinned Whisper and LS-EEND runtimes so installed users need no developer tools.
+- Add model preparation with download progress and verified Whisper downloads.
+- Add update checks, downloads, and explicit restart controls blocked during active work.
+- Add public-release checks for Developer ID signing and notarization configuration.
+- Public notarization and live update-feed validation remain pending; the repository is private.
+
+## 0.5.0 - 2026-10-02
+
+- Default call transcription to local Whisper, with OpenAI available independently.
+- Add experimental local LS-EEND speaker labeling on Apple Silicon, alongside Off and OpenAI options.
+- Add a local-audio plus ChatGPT-subscription preset with no metered API calls or automatic cloud fallback.
+- Apply local speaker labels in the background without delaying suggestions or replacing transcript text.
+- Bundle the native speaker runtime in the macOS desktop build and document source setup.
+- Add OpenAI and ElevenLabs transcription comparisons and multi-speaker diarization benchmark results.
+
 - Add a local Cohere-versus-Whisper comparison page with record-once replay, transcript comparison, latency, optional word-error scoring, cancellation, and report downloads.
-- Add pinned Apple Silicon MLX setup and model provenance, plus synthetic English/German smoke measurements. The default call transcription provider is unchanged.
+- Add pinned Apple Silicon MLX setup and model provenance, plus synthetic English/German smoke measurements.
 
 ## 0.4.0 - 2026-10-02
 

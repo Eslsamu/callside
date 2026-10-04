@@ -1,7 +1,9 @@
+import { createLocalSpeakerSink } from './local-speakers';
 import type { CaptureCallbacks, CaptureHandle, Settings, Source } from '../../shared/types.js';
 import { floatToPcm16, rms, StreamingResampler, VoiceActivityDetector } from './dsp.js';
 import { createDiarizedSink, createRealtimeSink, type AudioSink } from './transports.js';
 import { createBackgroundSpeakerSink } from './background.js';
+import { createLocalSink, prepareLocal } from './local-sink.js';
 
 interface SourceCapture {
   source: Source;
@@ -176,12 +178,29 @@ export async function startCapture(
     if (rejected) throw rejected.reason;
 
     if (stopping || startupEnded) throw new Error('Audio sharing ended during startup.');
+    if (settings.transcriptionProvider === 'local') {
+      for (const capture of sources)
+        callbacks.onStatus(
+          capture.source,
+          'Preparing local Whisper · first start downloads the model …',
+        );
+      await prepareLocal(token, (progress) => {
+        for (const capture of sources)
+          callbacks.onStatus(
+            capture.source,
+            progress.message +
+              (progress.percent === undefined ? '' : ' · ' + Math.round(progress.percent) + '%'),
+          );
+      });
+    }
     const prepared = await Promise.allSettled(
       sources.map(async (capture) => {
         capture.sink =
-          settings.captureMode === 'diarized'
-            ? createDiarizedSink(settings, token, capture.source, callbacks, fail)
-            : await createRealtimeSink(settings, token, capture.source, callbacks, fail);
+          settings.transcriptionProvider === 'local'
+            ? createLocalSink(settings, token, capture.source, callbacks, fail)
+            : settings.captureMode === 'diarized'
+              ? createDiarizedSink(settings, token, capture.source, callbacks, fail)
+              : await createRealtimeSink(settings, token, capture.source, callbacks, fail);
         if (stopping) {
           await capture.sink.stop();
           throw new Error('Recording ended during startup.');
@@ -190,8 +209,13 @@ export async function startCapture(
           settings.captureMode === 'realtime' &&
           settings.backgroundSpeakers &&
           capture.source === 'system'
-        )
-          capture.background = createBackgroundSpeakerSink(settings, token, callbacks);
+        ) {
+          callbacks.onAttributionStatus?.('Loading speaker labeling…');
+          capture.background =
+            settings.diarizationProvider === 'local'
+              ? await createLocalSpeakerSink(token, callbacks)
+              : createBackgroundSpeakerSink(settings, token, callbacks);
+        }
         const context = new AudioContext({ latencyHint: 'interactive' });
         capture.context = context;
         await context.audioWorklet.addModule('/pcm-worklet.js');
@@ -207,7 +231,10 @@ export async function startCapture(
         );
         capture.input = input;
         const resampler = new StreamingResampler(context.sampleRate);
-        const vad = settings.captureMode === 'realtime' ? new VoiceActivityDetector() : undefined;
+        const vad =
+          settings.captureMode === 'realtime' && settings.transcriptionProvider !== 'local'
+            ? new VoiceActivityDetector()
+            : undefined;
         capture.vad = vad;
         let originTime = Date.now() - context.currentTime * 1000;
         let firstPacket = true;

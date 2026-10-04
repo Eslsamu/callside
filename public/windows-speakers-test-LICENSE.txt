@@ -1,0 +1,23 @@
+AMI Meeting Corpus audio and transcript excerpt
+
+Credit: AMI Project, AMI Meeting Corpus.
+Meeting: ES2004a, Mix-Headset recording.
+windows-speakers-test.wav: 570.000–620.000 seconds (50 seconds).
+windows-system-test.wav: 570.000–575.320 seconds (5.32 seconds).
+Source: https://groups.inf.ed.ac.uk/ami/download/
+Corpus license: https://groups.inf.ed.ac.uk/ami/corpus/license.shtml
+Audio download mirror: https://huggingface.co/datasets/FluidInference/ami-corpus-mirror
+Reference words: AMI manual annotations v1.6.2, words/ES2004a.[A-D].words.xml.
+Speaker mapping: corpusResources/meetings.xml in the same annotation archive.
+
+Licensed under Creative Commons Attribution 4.0 International (CC BY 4.0):
+https://creativecommons.org/licenses/by/4.0/
+Legal code: https://creativecommons.org/licenses/by/4.0/legalcode
+
+Changes by Callside: cropped to 50-second and 5.32-second excerpts and resampled to mono
+24 kHz signed 16-bit PCM WAV. The accompanying JSON contains selected reference
+word cues, with punctuation normalized for readability and one indicated omission.
+No endorsement by the AMI Project or the participants is implied.
+
+This audio and the reference words retain their CC BY 4.0 license and are not
+covered by Callside's MIT software license.

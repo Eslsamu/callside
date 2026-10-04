@@ -1,5 +1,5 @@
 import type { LocalMeasurement } from './local-test.js';
-export type ComparisonEngineId = 'whisper' | 'cohere';
+export type ComparisonEngineId = 'whisper' | 'cohere' | 'openai' | 'elevenlabs';
 export interface ComparisonMetrics {
   audioMs: number;
   wallMs: number;

@@ -1,8 +1,20 @@
-# Cohere versus Whisper local test
+# Transcription benchmark: Whisper, Cohere, OpenAI and ElevenLabs
 
-This experiment compares **Cohere Transcribe** with **Whisper large-v3-turbo Q5**, the baseline used by Callside's earlier local microphone test. Whisper is the model name; Wispr Flow is a separate product and is not being benchmarked here.
+This experiment compares **Cohere Transcribe** with **Whisper large-v3-turbo Q5**, the baseline used by Callside's earlier local microphone test. Whisper is the local open model.
 
-The test records once and replays the same audio separately through both local engines. It needs no API key or subscription. Both models are batch speech-recognition models used with short, repeated audio snapshots; this is a test of a practical live-transcription pipeline, not native streaming or speaker identification.
+The local test records once and replays the same audio separately through both local engines. It needs no API key or subscription. Both models are batch speech-recognition models used with short, repeated audio snapshots; this is a test of a practical live-transcription pipeline, not native streaming or speaker identification.
+
+## Cloud comparison
+
+The same page also supports **OpenAI GPT-Live-Transcribe** and **ElevenLabs Scribe v2 Realtime**. Select their checkboxes and paste API keys into the masked fields. Keys remain in page memory until reload and are excluded from reports; no browser storage is used. Alternatively set `OPENAI_API_KEY` and `ELEVENLABS_API_KEY` in your ignored `.env` before starting the server. Existing server OpenAI credentials are reused when available. Never commit keys.
+
+Record once, select all four models, optionally add the exact reference transcript, and run. Each selected engine receives its own paced replay. Expect approximately four times the recording duration plus connection setup and final processing for all four. The order rotates between runs. A provider error marks that result failed and allows the other models to finish.
+
+Cloud engines receive audio over native WebSocket streams, with the same local energy detector, 500 ms silence boundary and 12 second turn limit as the local engines. OpenAI receives resampled 24 kHz PCM; ElevenLabs receives 16 kHz PCM. Local engines still decode repeated snapshots. This compares the practical pipelines, not identical inference algorithms. Reference text is only for local scoring and is never provided as a model prompt.
+
+Cloud connection setup is excluded from speech latency and recorded separately as `details.setupMs`. Cloud internal processing/queue times are unavailable; the UI shows dashes, and the report uses zero placeholders with `processingMetricsAvailable: false`. Do not interpret those placeholders as zero compute time. Estimated audio costs in reports are not billing records. Published rates used for estimates on October 2, 2026: OpenAI $1.02/audio hour; ElevenLabs $0.39/audio hour, before taxes. Both cloud models together cost roughly $0.024 for one 60-second replay each. Only selected cloud engines receive audio and incur API charges. No suggestions or background diarization run in this benchmark.
+
+Sources: [OpenAI live transcription](https://developers.openai.com/api/docs/guides/realtime-transcription), [ElevenLabs realtime protocol](https://elevenlabs.io/docs/api-reference/speech-to-text/v-1-speech-to-text-realtime), [OpenAI pricing](https://developers.openai.com/api/docs/models/gpt-live-transcribe), [ElevenLabs pricing](https://elevenlabs.io/pricing/api).
 
 ## Setup and run
 
@@ -60,7 +72,7 @@ The final transcripts matched between models. The scorer counted one formatting 
 
 Raw reports: [English](benchmarks/2026-10-02-en.json), [German](benchmarks/2026-10-02-de.json). References and exact model/runtime revisions are included. The voices were macOS Samantha and Anna; audio was converted to mono 16 kHz PCM before submitting it to the comparison route. They contain synthetic text only. The reported Cohere MLX peak allocation is not total process/system memory and is not a comparative RAM measurement.
 
-**Recommendation:** proceed with natural English/German recordings in this test. Keep the current API transcription default until real speech, domain vocabulary, noise, and longer runs have been checked. This initial check does not establish diarization quality, native streaming, or a universally better model.
+**Recommendation:** proceed with natural English/German recordings in this test. Callside now defaults to local Whisper; keep OpenAI available as an alternative while testing real speech, domain vocabulary, noise, and longer runs. This initial check does not establish diarization quality, native streaming, or a universally better model.
 
 ## Suggested real-speech tests
 
@@ -76,7 +88,7 @@ Use consented call audio for multi-person tests. Transcription quality is separa
 
 ## Data and security
 
-Audio is kept in browser/server memory and sent only to the loopback server. Cohere communicates with its Python worker over private stdio; Whisper uses a loopback endpoint with a random private path. The comparison routes use Callside's existing origin and local-session-token checks. There is no cloud fallback and no API inference billing.
+For local-only selections, audio is kept in browser/server memory and sent only to the loopback server. Selected cloud models additionally receive the recording at their provider endpoints. Cohere communicates with its Python worker over private stdio; Whisper uses a loopback endpoint with a random private path. The comparison routes use Callside's existing origin and local-session-token checks. There is no automatic cloud fallback. Local-only runs have no API inference billing.
 
 The app does not save recordings or reports automatically. A downloaded report includes transcript text and the reference you supplied, so review it before sharing. The selected Cohere weights are the pinned [community MLX 4-bit conversion](https://huggingface.co/lyzgeorge/cohere-transcribe-03-2026-mlx-4bit), not the full-precision official artifact. Its base revision and conversion revision are included in the report. Quantization and runtime differences are part of this device-level comparison.
 

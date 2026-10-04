@@ -5,14 +5,15 @@ import { safeSettings } from './session';
 const settingsKey = 'callside.settings.v1';
 
 export async function loadTemplate(): Promise<{ settings: Settings; error: string }> {
+  const defaults = DEFAULT_SETTINGS;
   try {
     const stored = window.callsideDesktop
       ? await window.callsideDesktop.loadTemplate()
       : JSON.parse(localStorage.getItem(settingsKey) || 'null');
-    return { settings: safeSettings(stored, DEFAULT_SETTINGS), error: '' };
+    return { settings: safeSettings(stored, defaults), error: '' };
   } catch {
     return {
-      settings: { ...DEFAULT_SETTINGS },
+      settings: { ...defaults },
       error:
         'Could not load the saved template. Defaults are shown; your saved copy has not been changed.',
     };
