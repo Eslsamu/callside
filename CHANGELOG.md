@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+## 0.7.0 - 2026-10-04
+
+- Provide an Apple Silicon community DMG with ad-hoc signing, no Apple notarization, and a documented first-launch approval flow.
+- Keep community builds on manual downloads instead of the signed automatic-update channel.
+
 - Update the vulnerable development dependency http-cache-semantics and isolate cloud audio test fixtures from local defaults.
 
 - Prepare the public source repository with current local/cloud documentation, third-party notices, and contributor/security guidance.

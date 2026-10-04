@@ -4,7 +4,7 @@ const identities = execFileSync('security', ['find-identity', '-v', '-p', 'codes
 });
 if (!identities.includes('Developer ID Application:'))
   throw Error(
-    'Public releases require a Developer ID Application certificate. For an explicitly requested local release, use npm run desktop:dist -- --version <version>.',
+    'Notarized releases require a Developer ID Application certificate. For an explicitly requested local release, use npm run desktop:dist -- --version <version>.',
   );
 const e = process.env;
 if (!(

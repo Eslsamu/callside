@@ -18,6 +18,7 @@ const { pathToFileURL } = require('node:url');
 const smokeTest = process.argv.includes('--smoke-test');
 const buildMetadata = require('../package.json');
 const windowsPreview = Boolean(buildMetadata.callsideWindowsPreview);
+const communityBuild = Boolean(buildMetadata.callsideCommunityBuild);
 if (windowsPreview && !smokeTest) {
   app.setName('Callside Windows Test');
   app.setPath('userData', path.join(app.getPath('appData'), 'Callside Windows Test'));
@@ -238,7 +239,10 @@ async function boot() {
 
   const { autoUpdater } = require('electron-updater');
   updates = require('./updates.cjs').createUpdates(autoUpdater, {
-    enabled: app.isPackaged && !smokeTest && !windowsPreview,
+    enabled: app.isPackaged && !smokeTest && !windowsPreview && !communityBuild,
+    unavailableMessage: communityBuild
+      ? 'Community build · not notarized by Apple. Download updates manually from github.com/Eslsamu/callside/releases.'
+      : undefined,
     version: app.getVersion(),
     canInstall: () => !sessionActive,
   });

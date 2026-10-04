@@ -39,4 +39,26 @@ describe('desktop updates', () => {
     expect(updates.status().message).not.toContain('token-secret');
     updates.close();
   });
+  it('keeps community builds on manual updates even if updater events arrive', async () => {
+    const updater = Object.assign(new EventEmitter(), {
+      checkForUpdates: vi.fn(),
+      quitAndInstall: vi.fn(),
+    });
+    const updates = createUpdates(updater, {
+      enabled: false,
+      version: '0.7.0',
+      canInstall: () => true,
+      unavailableMessage: 'Community build: download updates manually.',
+    });
+    expect(updates.status()).toMatchObject({
+      phase: 'unavailable',
+      message: 'Community build: download updates manually.',
+    });
+    await updates.check();
+    expect(updater.checkForUpdates).not.toHaveBeenCalled();
+    updater.emit('update-downloaded', { version: '0.8.0' });
+    expect(() => updates.install()).toThrow('No downloaded update');
+    expect(updater.quitAndInstall).not.toHaveBeenCalled();
+    updates.close();
+  });
 });

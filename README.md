@@ -14,12 +14,22 @@ It is a free, open-source alternative to Cluely for live conversation assistance
 
 ## macOS installer
 
-**Public downloads currently contain source code only.** No signed/notarized installer is published yet. For an explicitly built local Apple Silicon test DMG, drag Callside into Applications and launch it there.
-The installer bundles the local audio runtimes. Use **Settings → Audio sources → Download and prepare models**
-before your first call; no developer tools are needed on the installed Mac.
+[Download Callside 0.7.0 for Apple Silicon](https://github.com/Eslsamu/callside/releases/download/v0.7.0/Callside-0.7.0-mac-arm64.dmg) · [Release notes and SHA-256 checksum](https://github.com/Eslsamu/callside/releases/tag/v0.7.0)
 
-The current local installer is not Apple-notarized yet. Public signing and the public update feed
-remain release prerequisites. See [installation, builds, and updates](docs/macos-installer.md).
+Requires **macOS 14 or later on an Apple Silicon Mac (M1 or newer)**. Intel Macs,
+Windows, and Linux do not have a validated installer in this release.
+
+This is a **community build, not notarized by Apple**. macOS may block its first
+launch. Download only from this repository, drag Callside into Applications,
+and follow the [installation and first-launch instructions](docs/macos-installer.md).
+An Apple Developer membership is not required to use the app.
+
+The app includes the local audio runtimes. In **Settings → Audio sources**, use
+**Download and prepare models** before your first call. Initial downloads require
+internet and disk space; no Homebrew, Xcode, Python, or Node installation is needed.
+Suggestions still require an eligible ChatGPT plan or an OpenAI API key.
+Community builds use manual updates; replace the app in Applications with a newer
+release while retaining its saved settings and models.
 
 ## How it works without typing
 
@@ -37,7 +47,7 @@ The [comparison guide](docs/ALTERNATIVES.md) links to those products' official d
 
 ## Project status
 
-Early-stage software. The code is MIT-licensed. macOS Apple Silicon has been used for desktop testing. Windows and Linux packaging targets exist, but their capture paths need broader real-device testing. Build from source with the commands below; signed installers are not currently provided.
+Early-stage software. The code is MIT-licensed. macOS Apple Silicon has been used for desktop testing. Windows and Linux packaging targets exist, but their capture paths need broader real-device testing. A non-notarized Apple Silicon community installer is available above; build from source with the commands below for development.
 
 ## What it does
 

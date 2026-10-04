@@ -1,11 +1,11 @@
 // All network/update privileges stay in the main process. No credentials are shipped.
-function createUpdates(updater, { enabled, version, canInstall }) {
+function createUpdates(updater, { enabled, version, canInstall, unavailableMessage }) {
   let state = {
     phase: enabled ? 'idle' : 'unavailable',
     version,
     message: enabled
       ? 'Updates are checked when Callside opens.'
-      : 'Updates are available in installed desktop releases.',
+      : unavailableMessage || 'Updates are available in installed desktop releases.',
   };
   let checking = false,
     timer;
@@ -58,7 +58,7 @@ function createUpdates(updater, { enabled, version, canInstall }) {
     status: () => ({ ...state }),
     check,
     install() {
-      if (state.phase !== 'ready') throw Error('No downloaded update is ready.');
+      if (!enabled || state.phase !== 'ready') throw Error('No downloaded update is ready.');
       if (!canInstall()) throw Error('Finish your call and any active setup before restarting.');
       updater.quitAndInstall();
     },
