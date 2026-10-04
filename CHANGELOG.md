@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Update the vulnerable development dependency http-cache-semantics and isolate cloud audio test fixtures from local defaults.
+
 - Prepare the public source repository with current local/cloud documentation, third-party notices, and contributor/security guidance.
 
 - Add a private Windows x64 test installer with bundled Whisper and portable CPU speaker labeling, a guided simultaneous-audio and ChatGPT test, checkpoint recovery, restart verification, and a privacy-limited diagnostic report.

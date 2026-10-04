@@ -32,9 +32,9 @@ Whisper and LS-EEND weights; retain their notices when distributing it.
 
 - Whisper: [OpenAI Whisper](https://github.com/openai/whisper), MIT, converted
   large-v3-turbo Q5 weights from the pinned whisper.cpp model repository.
-- macOS speaker labels: [FluidInference LS-EEND CoreML](https://huggingface.co/FluidInference/ls-eend-coreml), AMI variant, via FluidAudio.
+- macOS speaker labels: [FluidInference LS-EEND CoreML](https://huggingface.co/FluidInference/ls-eend-coreml), MIT, AMI variant, via FluidAudio.
 - Windows speaker labels: [LS-EEND ONNX](https://huggingface.co/GradientDescent2718/LS-EEND-ONNX), revision and checksums in the setup script. See native/windows/diarization/README.md.
-- Optional Cohere comparison: model/runtime provenance is documented in
+- Optional Cohere comparison: the pinned CohereLabs base model and MLX conversion declare Apache-2.0. Model/runtime provenance is documented in
   [the comparison guide](local-comparison.md). It is installed separately and
   is not included in normal desktop packages. Review the upstream model card
   and license when changing models or redistributing weights.
