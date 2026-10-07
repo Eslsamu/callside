@@ -48,7 +48,7 @@ The transcript window sent to an answer model is bounded. In a long call, earlie
 
 ## Desktop shell
 
-`desktop/main.cjs` starts the local production server on a free port and opens its loopback URL. The preload exposes only the desktop controls the UI needs: answer shortcut subscription, an always-on-top setting, platform information, and template load/save/remove operations. The renderer restores the template before mounting the main interface, so defaults cannot race with saved settings or user edits.
+`desktop/main.cjs` starts the local production server on a free port and opens its loopback URL. The preload exposes only the desktop controls the UI needs: answer shortcut subscription, an always-on-top setting, platform information, and named-template load/save operations. The renderer restores the template before mounting the main interface, so defaults cannot race with saved settings or user edits.
 
 The desktop app registers **F8** and `CommandOrControl+Shift+Space` as global shortcuts. Registration can fail if the OS or another application owns a combination. In browser mode, **F8** is handled by the UI and requires focus. Window pinning keeps the suggestions visible during calls.
 
@@ -70,6 +70,6 @@ An answer-only provider can reuse OpenAI transcription. A transcription-only pro
 
 ## Persistence and hosting
 
-There is no database. Conversation state stays in the renderer's memory, and a UI-entered key stays in the server's memory. Export is the explicit persistence boundary for conversations. The separate **Save template** action saves configuration, prompts, and context in `template.json` in the desktop app's user data directory, or `localStorage` in browser mode. Desktop storage is independent of the local server's changing port and the release folder. The main process filters settings against known fields, writes atomically with owner-only permissions, and excludes keys or conversation contents. **Reset** removes that template. A refresh or process restart can lose unsaved session state.
+There is no database. Conversation state stays in the renderer's memory, and a UI-entered key stays in the server's memory. Export is the explicit persistence boundary for conversations. The **Save template** action persists the selected named template in `templates.json` in the desktop app's user data directory, or `callside.templates.v2` in browser localStorage. Each template has its own configuration, prompts, and context; legacy settings migrate into Saved setup. Desktop storage is independent of the local server's changing port and the release folder. The main process filters settings against known fields, writes atomically with owner-only permissions, and excludes keys or conversation contents. **Delete template** removes a selected entry after confirmation; at least one template must remain. A refresh or process restart can lose unsaved session state.
 
 If adding persistence, make it opt-in, document what is stored, and define deletion and key handling first. If adding a hosted service, build user authentication and per-user isolation before exposing any of the local API routes. The local token is not a user authentication system.

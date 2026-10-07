@@ -48,10 +48,10 @@ describe('configurable tasks and reference material', () => {
     expect(manual.referenceMaterial).toBe(request.settings.context);
     expect(auto.instructions).toBe(manual.instructions);
     expect(auto.referenceMaterial).toBe(manual.referenceMaterial);
-    expect(manual.modeInstructions).toContain(
-      'A question or completed speaking turn is not required',
-    );
+    expect(manual.instructions).toBe(request.settings.systemPrompt);
+    expect(manual.modeInstructions).toBe('');
     expect(auto.modeInstructions).toContain('[[WAIT]]');
+    expect(auto.modeInstructions).toContain(request.settings.autoPrompt);
     expect(JSON.parse(manual.input).callTranscript[0].partial).toBe(true);
     expect(JSON.parse(auto.input).userCommand).toBe('Give a hint');
     expect(manual.maxOutputTokens).toBeNull();

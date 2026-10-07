@@ -85,36 +85,40 @@ describe('OpenAI provider contract (no upstream network)', () => {
     );
     expect(received).toEqual([{ type: 'delta', text: 'Hello' }, { type: 'done' }]);
   });
-  it('omits API-only billing and unsupported controls for ChatGPT plan requests', async () => {
-    mocked.responses.mockResolvedValue(
-      (async function* () {
-        yield { type: 'response.output_text.delta', delta: 'Plan suggestion' };
-        yield { type: 'response.completed' };
-      })(),
-    );
-    const received = [];
-    for await (const event of new OpenAIProvider('fake-oauth', 'chatgpt').answer(
-      {
-        model: 'gpt-6.1-sol',
-        reasoningEffort: 'none',
-        fastMode: true,
-        instructions: 'Configured task',
-        referenceMaterial: 'Course context',
-        modeInstructions: 'Manual',
-        input: 'Transcript',
-        maxOutputTokens: 64,
-      },
-      new AbortController().signal,
-    ))
-      received.push(event);
-    const payload = mocked.responses.mock.lastCall![0];
-    expect(payload).toMatchObject({ store: false, stream: true, reasoning: { effort: 'none' } });
-    for (const field of ['service_tier', 'max_output_tokens', 'prompt_cache_options'])
-      expect(payload).not.toHaveProperty(field);
-    expect(JSON.stringify(payload)).not.toContain('prompt_cache_breakpoint');
-    expect(JSON.stringify(payload)).toContain('Course context');
-    expect(received.at(-1)).toEqual({ type: 'done' });
-  });
+  it.each([false, true])(
+    'supports Fast mode %s without API-only controls for ChatGPT plan requests',
+    async (fastMode) => {
+      mocked.responses.mockResolvedValue(
+        (async function* () {
+          yield { type: 'response.output_text.delta', delta: 'Plan suggestion' };
+          yield { type: 'response.completed' };
+        })(),
+      );
+      const received = [];
+      for await (const event of new OpenAIProvider('fake-oauth', 'chatgpt').answer(
+        {
+          model: 'gpt-6.1-sol',
+          reasoningEffort: 'none',
+          fastMode,
+          instructions: 'Configured task',
+          referenceMaterial: 'Course context',
+          modeInstructions: 'Manual',
+          input: 'Transcript',
+          maxOutputTokens: 64,
+        },
+        new AbortController().signal,
+      ))
+        received.push(event);
+      const payload = mocked.responses.mock.lastCall![0];
+      expect(payload).toMatchObject({ store: false, stream: true, reasoning: { effort: 'none' } });
+      expect(payload.service_tier).toBe(fastMode ? 'priority' : 'default');
+      for (const field of ['max_output_tokens', 'prompt_cache_options'])
+        expect(payload).not.toHaveProperty(field);
+      expect(JSON.stringify(payload)).not.toContain('prompt_cache_breakpoint');
+      expect(JSON.stringify(payload)).toContain('Course context');
+      expect(received.at(-1)).toEqual({ type: 'done' });
+    },
+  );
   it('fails on incomplete streams instead of presenting an empty success', async () => {
     mocked.responses.mockResolvedValue(
       (async function* () {

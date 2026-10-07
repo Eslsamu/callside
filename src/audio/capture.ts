@@ -152,7 +152,35 @@ export async function startCapture(
             // Explicitly request system audio; the chosen surface must still supply a live track.
             systemAudio: 'include',
           } as DisplayMediaStreamOptions & { systemAudio: 'include' });
-      requests.push(acquire('system', request));
+      requests.push(
+        acquire(
+          'system',
+          request.catch(async (error: unknown) => {
+            if (!systemDeviceId && window.callsideDesktop?.platform === 'darwin') {
+              const status = await window.callsideDesktop
+                .getCaptureStatus?.()
+                .catch(() => undefined);
+              if (status?.failure === 'missing-user-gesture')
+                throw new Error(
+                  'System audio capture requires a fresh click. Click Start call again.',
+                );
+              if (status?.failure === 'untrusted-request')
+                throw new Error(
+                  'Callside rejected the capture request. Quit and reopen the app, then retry.',
+                );
+              const reason = error instanceof Error ? error.message : String(error);
+              throw new Error(
+                'macOS could not start system audio capture. ' +
+                  (status?.packaged === false
+                    ? 'This is a development build: enable the terminal or IDE that launched it (for example iTerm) in System Settings > Privacy & Security > Screen & System Audio Recording, then fully quit and reopen that terminal or IDE and relaunch Callside. Permissions for installed Callside copies may not apply to this build. '
+                    : 'Allow this copy of Callside in System Settings > Privacy & Security > Screen & System Audio Recording, then fully quit and reopen it. ') +
+                  `Details: ${status?.screenPermission ?? 'unknown permission'}; ${status?.failure || reason}.`,
+              );
+            }
+            throw error;
+          }),
+        ),
+      );
     }
     if (settings.captureMic) {
       callbacks.onStatus('mic', 'Connecting microphone …');
@@ -180,10 +208,7 @@ export async function startCapture(
     if (stopping || startupEnded) throw new Error('Audio sharing ended during startup.');
     if (settings.transcriptionProvider === 'local') {
       for (const capture of sources)
-        callbacks.onStatus(
-          capture.source,
-          'Preparing local Whisper · first start downloads the model …',
-        );
+        callbacks.onStatus(capture.source, 'Preparing local Whisper · reusing downloaded models …');
       await prepareLocal(token, (progress) => {
         for (const capture of sources)
           callbacks.onStatus(

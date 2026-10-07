@@ -461,6 +461,23 @@ nav {
 .text-button:hover:not(:disabled) {
   color: #ecfff3;
 }
+.chatgpt-actions {
+  display: grid;
+  gap: 8px;
+  margin-block: 16px 24px;
+}
+.chatgpt-action-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 24px;
+}
+.chatgpt-action-row button {
+  max-width: 100%;
+  min-height: 40px;
+  white-space: normal;
+  text-align: left;
+}
 .empty-transcript .text-button {
   margin-top: 17px;
 }
@@ -1329,4 +1346,334 @@ nav {
 }
 .desktop-updates progress {
   max-width: 180px;
+}
+
+.template-manager {
+  margin: 0 0 24px;
+  padding: 20px;
+  border: 1px solid var(--field-border, #526058);
+  border-radius: 8px;
+}
+.template-manager .field-row {
+  max-width: 760px;
+}
+.template-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin-top: 12px;
+}
+.template-manager .template-actions .secondary-button {
+  margin-top: 0;
+}
+.settings-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid var(--line);
+}
+.settings-tabs button {
+  background: transparent;
+  color: var(--muted);
+  padding: 10px 14px;
+  border-radius: 7px;
+}
+.settings-tabs button[aria-current='page'] {
+  color: var(--text);
+  background: #23322a;
+}
+.settings-template-summary {
+  color: var(--muted);
+  font-size: 12px;
+  margin: 16px 0 24px;
+}
+.settings-grid:not(.settings-page-connections) {
+  grid-template-columns: minmax(0, 1fr);
+}
+.settings-section[hidden] {
+  display: none;
+}
+
+.markdown-result {
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+.markdown-result > :first-child {
+  margin-top: 0;
+}
+.markdown-result > :last-child {
+  margin-bottom: 0;
+}
+.markdown-result p {
+  margin: 0 0 0.75em;
+  white-space: normal;
+}
+.markdown-result :is(h1, h2, h3, h4, h5, h6) {
+  font-size: 1.1em;
+  line-height: 1.35;
+  margin: 1em 0 0.5em;
+  font-weight: 650;
+}
+.markdown-result :is(ul, ol) {
+  padding-left: 1.3em;
+  margin: 0.5em 0 0.9em;
+}
+.markdown-result li {
+  margin: 0.3em 0;
+}
+.markdown-result li > p {
+  margin: 0;
+}
+.markdown-result a {
+  color: var(--accent);
+  text-underline-offset: 3px;
+}
+.markdown-result code {
+  font-family: monospace;
+  font-size: 0.85em;
+  background: var(--subtle);
+}
+.markdown-result pre {
+  padding: 12px;
+  background: var(--subtle);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.markdown-result blockquote {
+  margin: 1em 0;
+  padding-left: 16px;
+  color: var(--muted);
+  font-style: italic;
+}
+.markdown-result table {
+  width: 100%;
+  border-collapse: collapse;
+  table-layout: fixed;
+  font-size: 0.8em;
+  margin: 1em 0;
+}
+.markdown-result :is(th, td) {
+  border-bottom: 1px solid var(--line);
+  padding: 8px;
+  text-align: left;
+}
+.markdown-result hr {
+  border: 0;
+  border-top: 1px solid var(--line);
+  margin: 1em 0;
+}
+@media (min-width: 761px) {
+  .session-shell {
+    height: 100dvh;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+  .session-shell > .app-header {
+    flex-shrink: 0;
+  }
+  .session-shell > .message {
+    flex-shrink: 0;
+    max-height: 18vh;
+    overflow: auto;
+  }
+  .session-view {
+    flex: 1;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+  }
+  .session-top,
+  .session-meta,
+  .page-footer {
+    flex-shrink: 0;
+  }
+  .workspace {
+    flex: 1;
+    min-height: 0;
+    height: auto;
+    max-height: none;
+  }
+  .suggestion-area {
+    min-height: 0;
+    padding: 20px 24px;
+    overflow-anchor: none;
+  }
+  .empty-answer {
+    min-height: 0;
+  }
+  .assistant-pane > :not(.suggestion-area) {
+    flex-shrink: 0;
+  }
+  .answer-text {
+    font-size: clamp(18px, 1.6vw, 24px);
+  }
+}
+@media (max-width: 760px) {
+  .assistant-pane {
+    order: -1;
+    height: min(720px, 85dvh);
+  }
+  .suggestion-area {
+    min-height: 0;
+    max-height: none;
+    overflow-anchor: none;
+  }
+  .empty-answer {
+    min-height: 0;
+  }
+}
+@media (min-width: 761px) and (max-height: 900px) {
+  .session-shell .app-header {
+    height: 64px;
+  }
+  .session-view {
+    padding-top: 20px;
+  }
+  .session-meta {
+    margin-top: 16px;
+  }
+  .pane-header {
+    min-height: 48px;
+    padding: 12px 20px;
+  }
+  .auto-control {
+    padding: 10px 20px;
+  }
+  .answer-controls {
+    padding: 10px 20px;
+  }
+  .answer-button {
+    min-height: 40px;
+    padding: 8px 12px;
+  }
+  .command-options {
+    margin-top: 6px;
+  }
+  .shortcut-hint {
+    margin-top: 6px;
+  }
+  .suggestion-meta {
+    margin-bottom: 12px;
+  }
+  .suggestion-bottom {
+    margin-top: 12px;
+  }
+  .history summary {
+    padding-block: 6px;
+  }
+}
+
+/* The current answer fits as a whole; only history and transcript may scroll. */
+.suggestion-area {
+  overflow: hidden;
+}
+.suggestion {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+.suggestion-meta,
+.suggestion-bottom {
+  flex-shrink: 0;
+}
+.fitted-result {
+  flex: 1;
+  min-height: 0;
+  min-width: 0;
+  overflow: hidden;
+}
+.fitted-result .answer-text {
+  letter-spacing: normal;
+  line-height: 1.45;
+  column-gap: 1.5em;
+}
+.fitted-result .markdown-result pre {
+  padding: 0.6em;
+}
+.fitted-result .markdown-result :is(th, td) {
+  padding: 0.4em;
+}
+.fitted-result .markdown-result blockquote {
+  padding-left: 0.8em;
+}
+.fitted-result .stream-cursor {
+  height: 1em;
+  width: 0.1em;
+}
+.model-availability {
+  margin: 12px 0 24px;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.6;
+  overflow-wrap: anywhere;
+}
+.model-availability summary {
+  cursor: pointer;
+  color: var(--accent);
+}
+.model-availability ul {
+  padding-left: 20px;
+}
+.model-availability li {
+  margin-bottom: 8px;
+}
+.maximize-results {
+  flex-shrink: 0;
+}
+.assistant-pane .model-label {
+  margin-left: auto;
+}
+.answers-maximized > .app-header,
+.answers-maximized .transcript-pane,
+.answers-maximized .session-meta,
+.answers-maximized .page-footer {
+  display: none;
+}
+.answers-maximized {
+  height: 100dvh;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+.answers-maximized .session-view {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+  padding: 16px;
+}
+.answers-maximized .session-top {
+  margin-bottom: 12px;
+  flex-shrink: 0;
+}
+.answers-maximized .session-heading h1 {
+  font-size: 18px;
+}
+.answers-maximized .workspace {
+  display: flex;
+  flex: 1;
+  min-height: 0;
+  height: auto;
+  max-height: none;
+  overflow: hidden;
+}
+.answers-maximized .assistant-pane {
+  flex: 1;
+  height: auto;
+}
+.answers-maximized .suggestion-area {
+  min-height: 0;
+  max-height: none;
+}
+.answers-maximized .fitted-result {
+  width: 100%;
+  max-width: 760px;
+  align-self: center;
+}
+.answers-maximized .answer-text {
+  font-size: 30px;
 }

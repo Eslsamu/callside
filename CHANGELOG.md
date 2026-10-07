@@ -2,6 +2,15 @@
 
 ## Unreleased
 
+- Add named templates with independent reference material and settings, copy/rename/delete controls, and migration of the previous saved setup.
+- Split Settings into Templates & task, Models, Audio, Connections, and App. Show Save template only in Templates & task and space ChatGPT account actions consistently.
+- Render Markdown in current and previous results. Fit the full current answer to the panel, resize it with the window, and offer a maximize/restore button with a single reading column. Escape restores the transcript layout.
+- Remove hidden writing and manual-mode instructions. Send the editable task prompt verbatim and show the complete automatic-mode addition in Settings. Refine the visible Interview preset for spoken replies.
+- Enable Fast mode for ChatGPT subscription suggestions and explain increased plan usage. Add diagnostics for models absent from OpenAI's catalog, hidden models, and unsupported model IDs.
+- Detect saved Whisper models and distinguish loading from downloading after a restart or update.
+- Explain macOS capture failures using current permission diagnostics and distinguish terminal-launched development builds from installed apps.
+- Consume focused desktop answer-shortcut key events, including repeats, to address unhandled function-key alert sounds.
+
 ## 0.7.0 - 2026-10-04
 
 - Provide an Apple Silicon community DMG with ad-hoc signing, no Apple notarization, and a documented first-launch approval flow.

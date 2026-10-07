@@ -24,8 +24,8 @@ launch. Download only from this repository, drag Callside into Applications,
 and follow the [installation and first-launch instructions](docs/macos-installer.md).
 An Apple Developer membership is not required to use the app.
 
-The app includes the local audio runtimes. In **Settings → Audio sources**, use
-**Download and prepare models** before your first call. Initial downloads require
+The app includes the local audio runtimes. In **Settings → Audio**, use
+**Prepare local audio** before your first call. Initial downloads require
 internet and disk space; no Homebrew, Xcode, Python, or Node installation is needed.
 Suggestions still require an eligible ChatGPT plan or an OpenAI API key.
 Community builds use manual updates; replace the app in Applications with a newer
@@ -86,7 +86,7 @@ Apple Silicon (macOS 14+, Xcode/Swift required):
 npm run local:speakers:setup
 ```
 
-In **Settings → Audio sources**, choose **Use local audio + ChatGPT subscription**,
+In **Settings → Audio**, choose **Use local audio + ChatGPT subscription**,
 then connect your ChatGPT account in settings. This selects local Whisper,
 local LS-EEND speaker labeling, and subscription suggestions. Model weights
 download on first use. There is no automatic cloud or API-billing fallback.
@@ -146,7 +146,7 @@ The desktop app supports **Continue with ChatGPT** for contextual suggestions us
 
 Credentials are encrypted using the OS key store and refreshed automatically. You can switch accounts, reconnect, sign out, and open ChatGPT usage settings. Tokens are never saved in templates or exports. Subscription errors **never fall back to API billing**. The browser-only version currently supports API keys only.
 
-In subscription mode, custom output caps, priority/Fast mode, and explicit cache controls are omitted. Reasoning strength, reference material, streamed suggestions, and automatic triggers remain available. Account-specific GPT-6 model availability comes from OpenAI; a subscription does not guarantee access to every model. The built-in demo stays synthetic and does not test your subscription connection.
+In subscription mode, custom output caps and explicit cache controls are omitted. Fast mode requests priority processing where the account allows it. OpenAI documents 2.5× included subscription usage for Fast mode and 2× purchased-credit usage; see [subscription speed and usage](https://learn.chatgpt.com/docs/agent-configuration/speed). Reasoning strength, reference material, streamed suggestions, and automatic triggers remain available. Account-specific GPT-6 model availability comes from OpenAI; a subscription does not guarantee access to every model. The built-in demo stays synthetic and does not test your subscription connection.
 
 New settings default to local Whisper transcription, experimental local LS-EEND speaker labeling, and `gpt-6-luna` with no reasoning for tasks. API billing is initially selected for suggestions; connect ChatGPT and choose subscription billing to use your plan. When you select cloud audio, the models are `gpt-live-transcribe` for live transcription and `gpt-4o-transcribe-diarize` for diarization. Access depends on your API project. Task models are restricted to GPT-6 Luna, GPT-6 Sol, GPT-6.1 Sol, and GPT-6 Astra. Reasoning strength is configurable: None, Low, Medium, High, Extra high, or Maximum; Astra and GPT-6.1 Sol start at Low. Fast mode requests priority processing where available at 2× standard token rates. It is off by default. The output budget includes both reasoning and visible answer tokens. Check [OpenAI API pricing](https://developers.openai.com/api/docs/pricing) and your project limits before a long call. Automatic mode can make repeated model requests, including requests whose result is silence.
 
@@ -181,13 +181,13 @@ In browser mode, choose a shareable tab or surface and enable its audio-sharing 
 
 ## Configure a task and reference material
 
-Put behavior in **Task instructions** and course notes, documentation, or other facts in **Reference material**. The application supports explanations, hints, corrections, summaries, and typed commands. Presets set the task, automatic rule, and trigger source. Your reference material stays in place. Exact old default prompts migrate to general task instructions; custom saved instructions and existing numeric output budgets are preserved.
+Put behavior in **Task instructions** and course notes, documentation, or other facts in **Reference material**. The application supports explanations, hints, corrections, summaries, and typed commands. Choose a named template in **Settings → Templates & task → Saved templates**. Each template has independent settings, instructions, and reference material. General, Sales, Interview, and Workshop start with separate empty reference material. Your previous saved configuration migrates as **Saved setup**. Switching retains unsaved field edits for this app session; click **Save template** to persist the selected template and reopen it next time. Enter a unique name and use **Save as new** to create a copy. **Rename** changes only the name; **Delete template** asks for confirmation. Templates never contain API keys, ChatGPT credentials, or transcripts. Exact old default prompts migrate to general task instructions; custom saved instructions and existing numeric output budgets are preserved.
 
 Reference material supports up to **100,000 characters**. The UI shows the count and retains oversized pasted text, but blocks task requests until it is shortened. The entire reference material is included with every request. Conversation history is a separate rolling window: the newest 120 transcript entries, bounded to 24,000 text characters. Callside does not retain the full workshop history in each model request.
 
 ### Workshop setup
 
-1. Open **Settings** and choose **Workshop** under **Task configuration**.
+1. Open **Settings** and choose **Workshop** under **Saved templates**.
 2. Paste the course notes into **Reference material**. Include section names, exercise identifiers, and official solutions where available.
 3. Choose **GPT-6.1 Sol**, **Low** reasoning, and **Model default** under **Output token limit**. Fast mode is optional and costs more.
 4. Click **Save template**, return to **Conversation**, and leave **Automatic hints** off for the first test.
@@ -199,7 +199,7 @@ For automatic assistance, select **Automatic trigger source**: **Other speakers 
 
 ### Reference caching and output limits
 
-Requests put stable application instructions, task instructions, and the automatic rule first, then the complete reference material in a separate data message with an explicit cache breakpoint. Mode instructions, recent transcript, previous results, and commands follow that boundary. The provider uses explicit caching with a 30-minute minimum TTL, so changing commands or switching manual/automatic mode preserves the earlier prefix. Cache reuse depends on provider behavior and unchanged settings/material; it is not guaranteed.
+Requests send the editable task instructions verbatim, then the complete reference material in a separate data message with an explicit cache breakpoint. There are no hidden application writing instructions or manual-mode instructions. Automatic requests add the exact rule and silence protocol shown under **Full automatic-mode addition** in Settings. Recent transcript, previous results, and commands follow as data. The provider uses explicit caching with a 30-minute minimum TTL for API billing, so changing commands or switching manual/automatic mode preserves the earlier prefix. Cache reuse depends on provider behavior and unchanged settings/material; it is not guaranteed.
 
 Session JSON exports include `requestUsage` for completed requests and intentional automatic skips when OpenAI reports usage. This records input, output, cached input, cache-write, and reasoning tokens where available. Failed or cancelled requests may incur usage that is not included. No document index, vector store, or embedding service is created. See [OpenAI prompt caching](https://developers.openai.com/api/docs/guides/prompt-caching).
 
@@ -212,7 +212,7 @@ The app and its server run locally. Local Whisper and local speaker labeling pro
 - API keys are held in server memory and are not returned to the renderer. Desktop users can explicitly remember a key using OS-backed encryption in app data outside the repository. Browser/session-only keys are not persisted by the UI.
 - The server listens on loopback. Keep it local; this is not a multi-user hosted service.
 - Transcripts and suggestions are not automatically written to disk. Exported files contain the conversation, so choose where to save them carefully.
-- **Save template** explicitly saves settings, prompts, and context on this device. Desktop templates use permanent app storage and survive restarts and release updates; browser mode uses browser storage. It does not save API keys or transcripts. **Reset** removes that saved template. Settings may contain confidential context, so review them before saving.
+- **Save template** explicitly saves settings, prompts, and context on this device. Desktop templates use permanent app storage and survive restarts and release updates; browser mode uses browser storage. It does not save API keys or transcripts. **Delete template** removes only the selected saved template after confirmation. Settings may contain confidential context, so review them before saving.
 - Stop capture when the call ends. Obtain the participants' agreement before transmitting their audio.
 
 See [security](SECURITY.md) for the threat model and reporting guidance.

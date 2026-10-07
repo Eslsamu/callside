@@ -246,7 +246,8 @@ describe('local HTTP API', () => {
       )
     ).text();
     expect(captured?.maxOutputTokens).toBe(32768);
-    expect(captured?.instructions).toContain('untrusted');
+    expect(captured?.instructions).toBe(DEFAULT_SETTINGS.systemPrompt);
+    expect(captured?.modeInstructions).toBe('');
     const context = JSON.parse(captured!.input).callTranscript as Array<{ text: string }>;
     expect(context.at(-1)?.text.startsWith('199:')).toBe(true);
     expect(context.some((entry) => entry.text.startsWith('0:'))).toBe(false);

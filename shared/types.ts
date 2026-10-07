@@ -105,6 +105,7 @@ export interface ChatGPTStatus {
   error: string;
   accounts: Array<{ id: string; label: string; connected: boolean }>;
   models: Array<{ id: string; name: string }>;
+  modelCatalog?: Array<{ id: string; name: string; visibility: string; supported: boolean }>;
 }
 export interface Bootstrap {
   chatgpt?: ChatGPTStatus;

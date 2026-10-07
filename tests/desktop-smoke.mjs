@@ -43,6 +43,10 @@ try {
     })),
   ).toEqual({ encrypt: 'function', decrypt: 'function' });
   await page.getByRole('button', { name: 'Settings', exact: true }).click();
+  await page
+    .getByRole('navigation', { name: 'Settings sections' })
+    .getByRole('button', { name: 'Connections', exact: true })
+    .click();
   await expect(page.getByLabel('Remember API key on this device')).toBeChecked();
   await expect(
     page.getByRole('button', { name: 'Continue with ChatGPT', exact: true }),
@@ -51,14 +55,30 @@ try {
     page.getByRole('combobox', { name: 'Pay for suggestions with', exact: true }),
   ).toHaveValue('api');
   await expect(page.getByLabel('Speaker labeling')).toHaveValue('local');
+  await page
+    .getByRole('navigation', { name: 'Settings sections' })
+    .getByRole('button', { name: 'Connections', exact: true })
+    .click();
   await expect(page.getByRole('button', { name: 'Save API key', exact: true })).toBeDisabled();
-  await page.getByRole('button', { name: 'Workshop', exact: true }).click();
+  await page
+    .getByRole('navigation', { name: 'Settings sections' })
+    .getByRole('button', { name: 'Templates & task', exact: true })
+    .click();
+  await page.getByLabel('Saved templates', { exact: true }).selectOption('workshop');
   await expect(
     page.getByRole('combobox', { name: 'Automatic trigger source', exact: true }),
   ).toHaveValue('either');
+  await page
+    .getByRole('navigation', { name: 'Settings sections' })
+    .getByRole('button', { name: 'Models', exact: true })
+    .click();
   await expect(page.getByRole('combobox', { name: 'Output token limit', exact: true })).toHaveValue(
     'model',
   );
+  await page
+    .getByRole('navigation', { name: 'Settings sections' })
+    .getByRole('button', { name: 'Templates & task', exact: true })
+    .click();
   await expect(page.getByLabel('Task instructions', { exact: true })).toHaveValue(
     /Participants may move between topics/,
   );
@@ -82,6 +102,38 @@ try {
   );
   await expect(page.getByTestId('suggestion')).toContainText('Demo suggestion');
   await expect(page.getByRole('button', { name: /^Help now/ })).toBeEnabled();
+  const consumed = await app.evaluate(({ BrowserWindow }) => {
+    const contents = BrowserWindow.getAllWindows()[0].webContents;
+    let prevented = 0;
+    for (const [type, isAutoRepeat] of [
+      ['keyDown', false],
+      ['keyDown', true],
+      ['keyUp', false],
+    ]) {
+      contents.emit(
+        'before-input-event',
+        {
+          preventDefault() {
+            prevented++;
+          },
+        },
+        {
+          key: 'F8',
+          code: 'F8',
+          type,
+          isAutoRepeat,
+          meta: false,
+          control: false,
+          shift: false,
+          alt: false,
+        },
+      );
+    }
+    return prevented;
+  });
+  expect(consumed).toBe(3);
+  await expect(page.getByText('1 previous results', { exact: true })).toBeVisible();
+  await expect(page.getByRole('button', { name: /^Help now/ })).toBeEnabled();
   if (process.env.CALLSIDE_SMOKE_CONTROLS_SCREENSHOT) {
     await page
       .locator('.answer-controls')
@@ -98,7 +150,15 @@ try {
   await page.getByRole('button', { name: 'Settings', exact: true }).click();
   const course = 'Synthetic course notes for the restart check. '.repeat(750);
   await page.getByLabel('Reference material', { exact: true }).fill(course);
+  await page
+    .getByRole('navigation', { name: 'Settings sections' })
+    .getByRole('button', { name: 'Models', exact: true })
+    .click();
   await page.getByRole('combobox', { name: 'Task model', exact: true }).selectOption('gpt-6.1-sol');
+  await page
+    .getByRole('navigation', { name: 'Settings sections' })
+    .getByRole('button', { name: 'Templates & task', exact: true })
+    .click();
   await page.getByRole('button', { name: 'Save template', exact: true }).click();
   await expect(page.getByTestId('template-feedback')).toContainText('Template saved.');
   await expect(page.getByTestId('template-feedback')).toBeInViewport();
@@ -106,7 +166,8 @@ try {
     await page
       .locator('.settings-bottom')
       .screenshot({ path: process.env.CALLSIDE_SMOKE_TEMPLATE_SCREENSHOT });
-  const saved = JSON.parse(await readFile(join(profile, 'template.json'), 'utf8'));
+  const library = JSON.parse(await readFile(join(profile, 'templates.json'), 'utf8'));
+  const saved = library.templates.find((t) => t.id === library.activeId).settings;
   expect(saved.context).toBe(course);
   expect(saved).not.toHaveProperty('apiKey');
   expect(saved).not.toHaveProperty('transcript');
@@ -118,14 +179,23 @@ try {
   await reopened.getByRole('button', { name: 'Settings', exact: true }).click();
   expect(reopened.url()).not.toBe(firstUrl);
   await expect(reopened.getByLabel('Reference material', { exact: true })).toHaveValue(course);
+  await reopened
+    .getByRole('navigation', { name: 'Settings sections' })
+    .getByRole('button', { name: 'Models', exact: true })
+    .click();
   await expect(reopened.getByRole('combobox', { name: 'Task model', exact: true })).toHaveValue(
     'gpt-6.1-sol',
   );
+  await reopened
+    .getByRole('navigation', { name: 'Settings sections' })
+    .getByRole('button', { name: 'Templates & task', exact: true })
+    .click();
   await expect(reopened.getByLabel('Task instructions', { exact: true })).toHaveValue(
     /Participants may move between topics/,
   );
-  await reopened.getByRole('button', { name: 'Reset', exact: true }).click();
-  await expect(reopened.getByTestId('template-feedback')).toContainText('saved template removed');
+  await reopened.getByRole('button', { name: 'Delete template', exact: true }).click();
+  await reopened.getByRole('button', { name: 'Confirm delete', exact: true }).click();
+  await expect(reopened.getByTestId('template-feedback')).toContainText('Template deleted');
   await app.close();
 
   app = await launch();

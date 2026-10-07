@@ -7,10 +7,11 @@ const {
   session,
   dialog,
   safeStorage,
+  systemPreferences,
   shell,
 } = require('electron');
 const { createKeyStore } = require('./key-store.cjs');
-const { createTemplateStore } = require('./template-store.cjs');
+const { createTemplateStore, createTemplateLibraryStore } = require('./template-store.cjs');
 const { createTestStateStore, sanitizeTestReport } = require('./test-state.cjs');
 const { randomUUID } = require('node:crypto');
 const path = require('node:path');
@@ -96,6 +97,25 @@ function createWindow() {
     },
   });
   window.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
+  window.webContents.on('before-input-event', (event, input) => {
+    const accelerator =
+      input.key === 'F8'
+        ? 'F8'
+        : (input.meta || input.control) && input.shift && input.code === 'Space'
+          ? 'CommandOrControl+Shift+Space'
+          : undefined;
+    if (!accelerator) return;
+    // Consume both down/up and repeats before native menus or the renderer can
+    // treat a function key as unhandled (which can produce the macOS alert tone).
+    event.preventDefault();
+    if (
+      input.type === 'keyDown' &&
+      !input.isAutoRepeat &&
+      !shortcutStatus.some((s) => s.accelerator === accelerator && s.registered)
+    ) {
+      window?.webContents.send('callside:answer');
+    }
+  });
   window.webContents.on('will-navigate', (event, url) => {
     if (!trusted(url)) event.preventDefault();
   });
@@ -111,11 +131,16 @@ function createWindow() {
 }
 
 async function boot() {
+  console.info('Callside startup: loading defaults');
   const { DEFAULT_SETTINGS } = await import(
     pathToFileURL(path.join(__dirname, '../dist-server/shared/defaults.js')).href
   );
   const templateStore = createTemplateStore(
     path.join(app.getPath('userData'), 'template.json'),
+    DEFAULT_SETTINGS,
+  );
+  const templateLibraryStore = createTemplateLibraryStore(
+    path.join(app.getPath('userData'), 'templates.json'),
     DEFAULT_SETTINGS,
   );
   const testStateStore = createTestStateStore(
@@ -128,9 +153,11 @@ async function boot() {
     process.platform,
     (value) => value === 'callside-test-storage-sentinel',
   );
+  console.info('Callside startup: loading server');
   const serverModule = await import(
     pathToFileURL(path.join(__dirname, '../dist-server/server/index.js')).href
   );
+  console.info('Callside startup: initializing server and credential stores');
   server = await serverModule.startServer({
     localWhisperBinary: app.isPackaged
       ? path.join(
@@ -173,6 +200,7 @@ async function boot() {
       return shell.openExternal(url);
     },
   });
+  console.info('Callside startup: server ready');
   appOrigin = new URL(server.url).origin;
 
   const appSession = session.defaultSession;
@@ -200,8 +228,21 @@ async function boot() {
     );
   });
 
+  let captureFailure = '';
+  ipcMain.handle('callside:capture-status', (event) => {
+    if (!trustedSender(event)) throw Error('Invalid desktop request.');
+    return {
+      packaged: app.isPackaged,
+      screenPermission:
+        process.platform === 'darwin'
+          ? systemPreferences.getMediaAccessStatus('screen')
+          : 'unknown',
+      failure: captureFailure,
+    };
+  });
   appSession.setDisplayMediaRequestHandler(
     async (request, callback) => {
+      captureFailure = '';
       if (
         !window ||
         !request.frame ||
@@ -209,6 +250,14 @@ async function boot() {
         !trusted(request.securityOrigin) ||
         !request.userGesture
       ) {
+        captureFailure = !request.userGesture ? 'missing-user-gesture' : 'untrusted-request';
+        console.warn('Callside capture rejected:', {
+          window: Boolean(window),
+          frame: Boolean(request.frame),
+          mainFrame: request.frame === window?.webContents.mainFrame,
+          trustedOrigin: trusted(request.securityOrigin),
+          userGesture: request.userGesture,
+        });
         callback({});
         return;
       }
@@ -219,7 +268,9 @@ async function boot() {
           types: ['screen'],
           thumbnailSize: { width: 0, height: 0 },
         });
+        console.info('Callside capture sources:', sources.length);
         if (!sources.length || !window || request.frame.isDestroyed()) {
+          captureFailure = !sources.length ? 'no-screens' : 'window-closed';
           callback({});
           return;
         }
@@ -230,7 +281,12 @@ async function boot() {
             ? { audio: 'loopback' }
             : {}),
         });
-      } catch {
+      } catch (error) {
+        captureFailure = 'screen-enumeration-failed';
+        console.warn(
+          'Callside capture failed:',
+          error instanceof Error ? error.message : String(error),
+        );
         callback({});
       }
     },
@@ -343,6 +399,15 @@ async function boot() {
   ipcMain.handle('callside:shortcut-status', (event) => {
     if (!trustedSender(event)) throw new Error('Invalid desktop request.');
     return shortcutStatus;
+  });
+
+  ipcMain.handle('callside:templates-load', (event) => {
+    if (!trustedSender(event)) throw new Error('Invalid desktop request.');
+    return templateLibraryStore.load();
+  });
+  ipcMain.handle('callside:templates-save', (event, value) => {
+    if (!trustedSender(event)) throw new Error('Invalid desktop request.');
+    return templateLibraryStore.save(value);
   });
 
   ipcMain.handle('callside:template-load', (event) => {

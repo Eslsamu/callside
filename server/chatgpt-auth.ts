@@ -65,6 +65,8 @@ export class ChatGPTAuth {
   private error = '';
   private epoch = 0;
   private models: Array<{ id: string; name: string }> = [];
+  private modelCatalog:
+    Array<{ id: string; name: string; visibility: string; supported: boolean }> | undefined;
   constructor(
     private store: SecretStore,
     private openBrowser: (url: string) => Promise<void>,
@@ -97,6 +99,7 @@ export class ChatGPTAuth {
       activeId: this.state.activeId,
       error: this.error,
       models: this.models,
+      modelCatalog: this.modelCatalog,
       accounts: this.state.accounts.map((a) => ({
         id: a.clientId,
         label: `${a.email || 'ChatGPT account'} · ${a.clientId.slice(-6)}`,
@@ -210,6 +213,7 @@ export class ChatGPTAuth {
           );
         }
         this.models = [];
+        this.modelCatalog = undefined;
         res.end(
           'ChatGPT connected. Return to Callside. Audio processing uses your selected transcription settings.',
         );
@@ -350,6 +354,12 @@ export class ChatGPTAuth {
         .parse(await response.json());
       if (generation !== this.epoch || accountId !== this.state.activeId)
         throw new PublicError('ChatGPT account changed. Refresh models again.');
+      this.modelCatalog = body.models.map((m) => ({
+        id: m.slug,
+        name: m.display_name,
+        visibility: m.visibility,
+        supported: (ANSWER_MODELS as readonly string[]).includes(m.slug),
+      }));
       this.models = body.models
         .filter(
           (m) => m.visibility === 'list' && (ANSWER_MODELS as readonly string[]).includes(m.slug),
@@ -370,6 +380,7 @@ export class ChatGPTAuth {
       throw new PublicError('Unknown ChatGPT account.');
     this.state.activeId = clientId;
     this.models = [];
+    this.modelCatalog = undefined;
     this.error = '';
     await this.persist();
   }
@@ -404,6 +415,7 @@ export class ChatGPTAuth {
       delete account.credentials;
     }
     this.models = [];
+    this.modelCatalog = undefined;
     this.error = revoked
       ? ''
       : 'Signed out locally. Remote revocation was not confirmed; disconnect Callside in ChatGPT Settings.';

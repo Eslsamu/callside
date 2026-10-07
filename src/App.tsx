@@ -1,5 +1,8 @@
 import { DesktopUpdates } from './DesktopUpdates';
 import { LocalAudioSetup } from './LocalAudioSetup';
+import { ResultMarkdown } from './ResultMarkdown';
+import { FittedResult } from './FittedResult';
+import { answerInstructions } from '../shared/instructions';
 import { ANSWER_MODELS, reasoningOptions } from '../shared/models';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import {
@@ -12,6 +15,8 @@ import {
   Headphones,
   Keyboard,
   Mic,
+  Maximize2,
+  Minimize2,
   Pin,
   Play,
   Radio,
@@ -22,7 +27,7 @@ import {
   Zap,
 } from 'lucide-react';
 import { DEFAULT_SETTINGS } from '../shared/defaults';
-import { MAX_CONTEXT_CHARACTERS, TASK_PRESETS } from '../shared/tasks';
+import { MAX_CONTEXT_CHARACTERS } from '../shared/tasks';
 import type {
   Bootstrap,
   ChatGPTStatus,
@@ -37,7 +42,8 @@ import { startCapture } from './audio/capture';
 import { TranscriptReconciler } from './audio/reconcile';
 import { streamAnswer } from './api';
 import { DEMO_TURNS, safeSettings, sessionMarkdown } from './session';
-import { saveTemplate, removeTemplate } from './template';
+import { createLibrary, saveTemplates } from './template';
+import type { TemplateLibrary } from '../shared/templates';
 
 const time = (value: number) =>
   new Date(value).toLocaleTimeString('en-GB', {
@@ -49,12 +55,36 @@ const time = (value: number) =>
 export default function App({
   initialSettings,
   initialError,
+  initialLibrary,
 }: {
+  initialLibrary?: TemplateLibrary;
   initialSettings: Settings;
   initialError: string;
 }) {
   const [settings, setSettings] = useState<Settings>(initialSettings);
+  const [library, setLibrary] = useState(() => initialLibrary ?? createLibrary(initialSettings));
+  const [activeTemplate, setActiveTemplate] = useState(
+    () => (initialLibrary ?? createLibrary(initialSettings)).activeId,
+  );
+  const [templateName, setTemplateName] = useState(
+    () =>
+      (initialLibrary ?? createLibrary(initialSettings)).templates.find(
+        (t) => t.id === (initialLibrary ?? createLibrary(initialSettings)).activeId,
+      )!.name,
+  );
+  const drafts = useRef<Record<string, Settings>>({});
+  const [deletePending, setDeletePending] = useState(false);
   const [bootstrap, setBootstrap] = useState<Bootstrap | null>(null);
+  const [settingsPage, setSettingsPage] = useState('task');
+  const [answersMaximized, setAnswersMaximized] = useState(false);
+  useEffect(() => {
+    if (!answersMaximized) return;
+    const restore = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') setAnswersMaximized(false);
+    };
+    window.addEventListener('keydown', restore);
+    return () => window.removeEventListener('keydown', restore);
+  }, [answersMaximized]);
   const [view, setView] = useState<'session' | 'settings'>('session');
   const [entries, setEntries] = useState<TranscriptEntry[]>([]);
   const [suggestions, setSuggestions] = useState<Suggestion[]>([]);
@@ -382,12 +412,12 @@ export default function App({
     };
     const unregister = window.callsideDesktop?.onAnswer(trigger);
     const handler = (event: KeyboardEvent) => {
-      if (event.repeat) return;
       if (
         event.key === 'F8' ||
         ((event.metaKey || event.ctrlKey) && event.shiftKey && event.code === 'Space')
       ) {
         event.preventDefault();
+        if (event.repeat) return;
         const accelerator = event.key === 'F8' ? 'F8' : 'CommandOrControl+Shift+Space';
         if (!window.callsideDesktop || shortcuts.current[accelerator] === false) trigger();
       }
@@ -466,6 +496,7 @@ export default function App({
   async function start() {
     if (!bootstrap) return;
     if (settings.transcriptionProvider === 'openai' && !bootstrap.hasApiKey) {
+      setSettingsPage('connections');
       setView('settings');
       setNotice('Add an OpenAI API key first.');
       return;
@@ -578,32 +609,80 @@ export default function App({
     }
   }
 
-  async function persistTemplate(reset = false) {
-    if (templateBusy) return;
-    const snapshot = settings;
-    setTemplateBusy(true);
+  function selectTemplate(id: string) {
+    drafts.current[activeTemplate] = settings;
+    const selected = library.templates.find((t) => t.id === id);
+    if (!selected) return;
+    setActiveTemplate(id);
+    setTemplateName(selected.name);
+    const nextSettings = drafts.current[id] ?? { ...selected.settings };
+    lastTemplateSettings.current = nextSettings;
+    setSettings(nextSettings);
     setTemplateFeedback(null);
+    setDeletePending(false);
+  }
+
+  async function persistTemplate(action: 'save' | 'new' | 'rename' | 'delete' = 'save') {
+    if (templateBusy) return;
+    const name = templateName.trim();
+    if (
+      action !== 'delete' &&
+      (!name ||
+        name.length > 80 ||
+        library.templates.some(
+          (t) =>
+            t.name.toLowerCase() === name.toLowerCase() &&
+            (action === 'new' || t.id !== activeTemplate),
+        ))
+    ) {
+      setTemplateFeedback({ text: 'Enter a unique template name (1–80 characters).', error: true });
+      return;
+    }
+    if (action === 'delete' && library.templates.length === 1) return;
+    const id = action === 'new' ? crypto.randomUUID() : activeTemplate;
+    const snapshot = safeSettings(settings, DEFAULT_SETTINGS);
+    const templates =
+      action === 'delete'
+        ? library.templates.filter((t) => t.id !== id)
+        : action === 'new'
+          ? [...library.templates, { id, name, settings: snapshot }]
+          : library.templates.map((t) =>
+              t.id === id
+                ? { ...t, name, settings: action === 'rename' ? t.settings : snapshot }
+                : t,
+            );
+    const next: TemplateLibrary = {
+      version: 2,
+      activeId: action === 'delete' ? templates[0].id : id,
+      templates,
+    };
+    setTemplateBusy(true);
     try {
-      if (reset) {
-        await removeTemplate();
-        const defaults = { ...DEFAULT_SETTINGS };
-        lastTemplateSettings.current = defaults;
-        setSettings(defaults);
-      } else await saveTemplate(snapshot);
-      if (!reset) lastTemplateSettings.current = latest.current.settings;
+      await saveTemplates(next);
+      if (action === 'new') drafts.current[activeTemplate] = snapshot;
+      setLibrary(next);
+      setActiveTemplate(next.activeId);
+      const selected = templates.find((t) => t.id === next.activeId)!;
+      setTemplateName(selected.name);
+      if (action === 'delete') {
+        delete drafts.current[id];
+        const nextSettings = drafts.current[selected.id] ?? { ...selected.settings };
+        lastTemplateSettings.current = nextSettings;
+        setSettings(nextSettings);
+      } else if (action !== 'rename') drafts.current[id] = snapshot;
+      setDeletePending(false);
       setTemplateFeedback({
-        text: reset
-          ? 'Settings reset and saved template removed.'
-          : latest.current.settings !== snapshot
-            ? 'Template saved. New edits have not been saved yet.'
-            : 'Template saved. It will load automatically when you reopen Callside.',
+        text:
+          action === 'delete'
+            ? 'Template deleted.'
+            : action === 'rename'
+              ? 'Template renamed.'
+              : 'Template saved. It will load automatically when you reopen Callside.',
         error: false,
       });
     } catch {
       setTemplateFeedback({
-        text: reset
-          ? 'Could not remove the saved template. Your settings have been kept.'
-          : 'Could not save the template. Your edits are still here; please try again.',
+        text: 'Could not save templates. Your edits are still here; please try again.',
         error: true,
       });
     } finally {
@@ -684,7 +763,9 @@ export default function App({
     .padStart(2, '0')}:${(elapsed % 60).toString().padStart(2, '0')}`;
 
   return (
-    <div className="app-shell">
+    <div
+      className={`app-shell ${view === 'session' ? 'session-shell' : ''} ${view === 'session' && answersMaximized ? 'answers-maximized' : ''}`}
+    >
       <header className="app-header">
         <a
           className="brand"
@@ -962,6 +1043,15 @@ export default function App({
                       ? 'Using ChatGPT plan'
                       : 'API credit'}
                 </span>
+                <button
+                  className="icon-button maximize-results"
+                  aria-label={answersMaximized ? 'Restore results layout' : 'Maximize results'}
+                  aria-pressed={answersMaximized}
+                  title={answersMaximized ? 'Restore layout (Esc)' : 'Maximize results'}
+                  onClick={() => setAnswersMaximized((value) => !value)}
+                >
+                  {answersMaximized ? <Minimize2 size={18} /> : <Maximize2 size={18} />}
+                </button>
               </div>
               <label className="auto-control">
                 <span>
@@ -993,12 +1083,11 @@ export default function App({
                       <time>{time(current.timestamp)}</time>
                     </div>
                     {current.question && <p className="asked-question">{current.question}</p>}
-                    <p className="answer-text">
-                      {current.text}
-                      <span
-                        className={current.status === 'streaming' ? 'stream-cursor' : 'hidden'}
-                      />
-                    </p>
+                    <FittedResult
+                      allowColumns={!answersMaximized}
+                      text={current.text}
+                      streaming={current.status === 'streaming'}
+                    />
                     <div className="suggestion-bottom">
                       <span>
                         {current.status === 'streaming'
@@ -1044,7 +1133,9 @@ export default function App({
                       .map((s) => (
                         <article key={s.id}>
                           <time>{time(s.timestamp)}</time>
-                          <p>{s.text}</p>
+                          <div className="markdown-result">
+                            <ResultMarkdown text={s.text} />
+                          </div>
                         </article>
                       ))}
                   </div>
@@ -1148,9 +1239,118 @@ export default function App({
               <ArrowRight size={16} />
             </button>
           </div>
-          {window.callsideDesktop && <DesktopUpdates disabled={live || busy || setupBusy} />}
-          <div className="settings-grid">
-            <section className="settings-section">
+          <nav className="settings-tabs" aria-label="Settings sections">
+            {(
+              [
+                ['task', 'Templates & task'],
+                ['models', 'Models'],
+                ['audio', 'Audio'],
+                ['connections', 'Connections'],
+                ['app', 'App'],
+              ] as const
+            ).map(([id, label]) => (
+              <button
+                key={id}
+                type="button"
+                aria-current={settingsPage === id ? 'page' : undefined}
+                onClick={() => setSettingsPage(id)}
+              >
+                {label}
+              </button>
+            ))}
+          </nav>
+          <p className="settings-template-summary">
+            Current template:{' '}
+            <strong>{library.templates.find((t) => t.id === activeTemplate)?.name}</strong>
+          </p>
+          {settingsPage === 'app' &&
+            (window.callsideDesktop ? (
+              <DesktopUpdates disabled={live || busy || setupBusy} />
+            ) : (
+              <section className="settings-section">
+                <h2>Browser version</h2>
+                <p>Global shortcuts and application updates are available in the desktop app.</p>
+              </section>
+            ))}
+          <section
+            hidden={settingsPage !== 'task'}
+            className="settings-section template-manager"
+            aria-label="Template library"
+          >
+            <div className="field-row">
+              <label>
+                Saved templates
+                <select
+                  aria-label="Saved templates"
+                  value={activeTemplate}
+                  disabled={live || busy || templateBusy}
+                  onChange={(e) => selectTemplate(e.target.value)}
+                >
+                  {library.templates.map((t) => (
+                    <option key={t.id} value={t.id}>
+                      {t.name}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label>
+                Template name
+                <input
+                  value={templateName}
+                  maxLength={80}
+                  disabled={templateBusy}
+                  onChange={(e) => setTemplateName(e.target.value)}
+                />
+              </label>
+            </div>
+            <div className="template-actions">
+              <button
+                className="secondary-button"
+                disabled={templateBusy}
+                onClick={() => void persistTemplate('new')}
+              >
+                Save as new
+              </button>
+              <button
+                className="quiet-button"
+                disabled={templateBusy}
+                onClick={() => void persistTemplate('rename')}
+              >
+                Rename
+              </button>
+              <button
+                className="quiet-button"
+                disabled={live || busy || templateBusy || library.templates.length < 2}
+                onClick={() => setDeletePending(true)}
+              >
+                Delete template
+              </button>
+              {deletePending && (
+                <>
+                  <span>
+                    Delete “{library.templates.find((t) => t.id === activeTemplate)?.name}”?
+                  </span>
+                  <button
+                    className="quiet-button"
+                    disabled={templateBusy}
+                    onClick={() => void persistTemplate('delete')}
+                  >
+                    Confirm delete
+                  </button>
+                  <button className="quiet-button" onClick={() => setDeletePending(false)}>
+                    Cancel
+                  </button>
+                </>
+              )}
+            </div>
+            <p className="field-help">
+              Each template has its own settings, instructions, and reference material. Switching
+              keeps unsaved field edits until you close the app. Save template makes them permanent.
+              To create a copy, enter a new name and choose Save as new.
+            </p>
+          </section>
+          <div className={`settings-grid settings-page-${settingsPage}`}>
+            <section hidden={settingsPage !== 'connections'} className="settings-section">
               <h2>Connect OpenAI</h2>
               <p>
                 API usage is billed separately. A ChatGPT subscription does not include general
@@ -1216,7 +1416,7 @@ export default function App({
                   : 'The key stays in local server memory. For persistence, set OPENAI_API_KEY in your local .env file or use the desktop app.'}
               </p>
             </section>
-            <section className="settings-section">
+            <section hidden={settingsPage !== 'connections'} className="settings-section">
               <h2>Suggestion connection</h2>
               {bootstrap?.chatgpt?.available && (
                 <button
@@ -1280,25 +1480,27 @@ export default function App({
                       </button>
                     </>
                   ) : (
-                    <>
-                      <button
-                        className="secondary-button"
-                        disabled={chatgptBusy || busy}
-                        onClick={() => void chatgptAction('connect', bootstrap.chatgpt?.activeId)}
-                      >
-                        Continue with ChatGPT
-                      </button>
-                      {bootstrap.chatgpt.accounts.length > 0 && (
+                    <div className="chatgpt-actions">
+                      <div className="chatgpt-action-row">
                         <button
-                          className="text-button"
+                          className="secondary-button"
                           disabled={chatgptBusy || busy}
-                          onClick={() => void chatgptAction('connect')}
+                          onClick={() => void chatgptAction('connect', bootstrap.chatgpt?.activeId)}
                         >
-                          Add another account
+                          Continue with ChatGPT
                         </button>
-                      )}
+                        {bootstrap.chatgpt.accounts.length > 0 && (
+                          <button
+                            className="text-button"
+                            disabled={chatgptBusy || busy}
+                            onClick={() => void chatgptAction('connect')}
+                          >
+                            Add another account
+                          </button>
+                        )}
+                      </div>
                       {bootstrap.chatgpt.connected && (
-                        <>
+                        <div className="chatgpt-action-row">
                           <button
                             className="text-button"
                             disabled={chatgptBusy}
@@ -1313,9 +1515,9 @@ export default function App({
                           >
                             Sign out of ChatGPT
                           </button>
-                        </>
+                        </div>
                       )}
-                    </>
+                    </div>
                   )}
                   <p className="field-help">
                     Credentials are encrypted on this device and excluded from templates and
@@ -1327,7 +1529,7 @@ export default function App({
                 <p role="alert">{chatgptError || bootstrap?.chatgpt?.error}</p>
               )}
             </section>
-            <section className="settings-section">
+            <section hidden={settingsPage !== 'models'} className="settings-section">
               <h2>Model & language</h2>
               <label>
                 Task model
@@ -1360,7 +1562,56 @@ export default function App({
                   ))}
                 </select>
               </label>
-              <p className="field-help">Availability depends on your OpenAI project and account.</p>
+              <p className="field-help">
+                {settings.answerBilling === 'chatgpt'
+                  ? 'Models come from the selected account’s ChatGPT connection. This list can differ from the models in ChatGPT itself.'
+                  : 'Availability depends on your OpenAI API project.'}
+              </p>
+              {settings.answerBilling === 'chatgpt' && (
+                <details className="model-availability">
+                  <summary>Why is a model missing?</summary>
+                  <button
+                    className="text-button"
+                    disabled={chatgptBusy || !bootstrap?.chatgpt?.connected}
+                    onClick={() => void chatgptAction('models')}
+                  >
+                    Refresh model availability
+                  </button>
+                  {bootstrap?.chatgpt?.modelCatalog ? (
+                    <>
+                      <ul>
+                        {ANSWER_MODELS.map((id) => {
+                          const model = bootstrap.chatgpt!.modelCatalog!.find((m) => m.id === id);
+                          return (
+                            <li key={id}>
+                              {id}:{' '}
+                              {!model
+                                ? 'Not returned by OpenAI'
+                                : model.visibility !== 'list'
+                                  ? `Returned by OpenAI but hidden from the picker (${model.visibility})`
+                                  : 'Available'}
+                            </li>
+                          );
+                        })}
+                      </ul>
+                      {bootstrap.chatgpt.modelCatalog.some((m) => !m.supported) && (
+                        <p>
+                          Other returned model IDs (not supported by Callside):{' '}
+                          {bootstrap.chatgpt.modelCatalog
+                            .filter((m) => !m.supported)
+                            .map((m) => m.id)
+                            .join(', ')}
+                        </p>
+                      )}
+                    </>
+                  ) : (
+                    <p>
+                      Refresh to inspect the catalog returned by OpenAI. This does not generate an
+                      answer.
+                    </p>
+                  )}
+                </details>
+              )}
               <label>
                 Reasoning strength
                 <select
@@ -1388,15 +1639,14 @@ export default function App({
               <label className="checkbox-label">
                 <input
                   type="checkbox"
-                  checked={settings.answerBilling === 'api' && settings.fastMode}
-                  disabled={settings.answerBilling === 'chatgpt'}
+                  checked={settings.fastMode}
                   onChange={(e) => update('fastMode', e.target.checked)}
                 />
                 Fast mode
               </label>
               <p className="field-help">
                 {settings.answerBilling === 'chatgpt'
-                  ? 'Fast mode and custom output caps are unavailable through this subscription connection.'
+                  ? 'Fast requests priority processing where your plan allows it. OpenAI documents 2.5× included subscription usage for Fast mode; purchased credits use 2×. Custom output caps remain unavailable.'
                   : 'Fast requests priority processing at 2× standard token rates, where available.'}{' '}
                 Higher reasoning can increase response time and token use. The token budget includes
                 reasoning and the visible result.
@@ -1452,7 +1702,7 @@ export default function App({
                 a time limit.
               </p>
             </section>
-            <section className="settings-section audio-settings">
+            <section hidden={settingsPage !== 'audio'} className="settings-section audio-settings">
               <h2>Audio sources</h2>
               {live && (
                 <p className="audio-lock-note">
@@ -1703,29 +1953,12 @@ export default function App({
                 )}
               </fieldset>
             </section>
-            <section className="settings-section prompt-settings">
+            <section hidden={settingsPage !== 'task'} className="settings-section prompt-settings">
               <h2>Task configuration</h2>
-              <div className="preset-buttons">
-                {Object.entries(TASK_PRESETS).map(([id, preset]) => (
-                  <button
-                    key={id}
-                    className={settings.systemPrompt === preset.prompt ? 'preset active' : 'preset'}
-                    onClick={() =>
-                      setSettings((current) => ({
-                        ...current,
-                        systemPrompt: preset.prompt,
-                        autoPrompt: preset.autoPrompt,
-                        autoTriggerSource: preset.autoTriggerSource,
-                      }))
-                    }
-                  >
-                    {preset.name}
-                  </button>
-                ))}
-              </div>
               <p className="field-help">
-                Presets set the task, automatic rule, and trigger source. Your reference material
-                stays in place.
+                Task instructions are sent exactly as written. Callside adds no hidden style,
+                length, or interview instructions. Reference material, transcript, previous results,
+                and any typed command are sent separately as context.
               </p>
               <label>
                 Task instructions
@@ -1784,6 +2017,19 @@ export default function App({
                 />
               </label>
               <label>
+                Full automatic-mode addition (read-only)
+                <textarea
+                  rows={6}
+                  readOnly
+                  value={answerInstructions(settings, 'auto').modeInstructions}
+                />
+              </label>
+              <p className="field-help">
+                Manual requests use only Task instructions. Automatic requests also include the
+                exact addition above. The [[WAIT]] marker lets Callside stay silent when your rule
+                does not call for a result.
+              </p>
+              <label>
                 Minimum interval between automatic checks (seconds)
                 <input
                   type="number"
@@ -1800,37 +2046,32 @@ export default function App({
               </p>
             </section>
           </div>
-          <div className="settings-bottom">
-            <div className="template-copy">
-              <p>
-                Changes apply immediately. Saving a template stores prompts and context on this
-                device, without keys or transcripts.
-              </p>
-              {templateFeedback && (
-                <p
-                  className={`template-feedback ${templateFeedback.error ? 'error' : ''}`}
-                  role={templateFeedback.error ? 'alert' : 'status'}
-                  data-testid="template-feedback"
-                >
-                  {templateFeedback.text}
+          {settingsPage === 'task' && (
+            <div className="settings-bottom">
+              <div className="template-copy">
+                <p>
+                  Changes apply immediately. Save template updates only the selected template on
+                  this device. Keys and transcripts are never included.
                 </p>
-              )}
+                {templateFeedback && (
+                  <p
+                    className={`template-feedback ${templateFeedback.error ? 'error' : ''}`}
+                    role={templateFeedback.error ? 'alert' : 'status'}
+                    data-testid="template-feedback"
+                  >
+                    {templateFeedback.text}
+                  </p>
+                )}
+              </div>
+              <button
+                className="secondary-button"
+                disabled={templateBusy}
+                onClick={() => void persistTemplate()}
+              >
+                {templateBusy ? 'Saving …' : 'Save template'}
+              </button>
             </div>
-            <button
-              className="secondary-button"
-              disabled={templateBusy}
-              onClick={() => void persistTemplate()}
-            >
-              {templateBusy ? 'Saving …' : 'Save template'}
-            </button>
-            <button
-              className="quiet-button"
-              disabled={live || templateBusy}
-              onClick={() => void persistTemplate(true)}
-            >
-              Reset
-            </button>
-          </div>
+          )}
         </main>
       )}
     </div>
