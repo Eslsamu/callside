@@ -1,0 +1,62 @@
+name: Windows test build
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [codex/windows-test-build]
+    paths:
+      - '.github/workflows/windows-test-build.yml'
+      - 'scripts/windows-*.mjs'
+      - 'scripts/windows-preview.cjs'
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: windows-2022
+    timeout-minutes: 45
+    env:
+      OPENAI_API_KEY: ''
+      CSC_IDENTITY_AUTO_DISCOVERY: 'false'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: Download and verify the pinned Whisper model
+        run: node --import tsx --input-type=module -e "import { ensureWhisperModel } from './server/whisper-model.ts'; await ensureWhisperModel();"
+      - name: Build native runtimes and test packages from this commit
+        run: npm run desktop:windows-preview -- --test-package
+      - name: Check desktop test flow without microphones or paid APIs
+        run: node tests/windows-desktop-smoke.mjs
+      - name: Include instructions and build provenance
+        shell: pwsh
+        run: |
+          Copy-Item docs/windows-quick-check.txt .local/windows-preview/START_HERE.txt
+          Copy-Item docs/windows-testing.md .local/windows-preview/TESTING.md
+          $files = Get-ChildItem .local/windows-preview/Callside-Windows-Test-x64.exe, .local/windows-preview/Callside-Windows-Test-x64.zip
+          $files | ForEach-Object { "$((Get-FileHash $_.FullName -Algorithm SHA256).Hash.ToLower())  $($_.Name)" } | Set-Content .local/windows-preview/SHA256SUMS.txt
+          @{
+            commit = $env:GITHUB_SHA
+            repository = $env:GITHUB_REPOSITORY
+            run = "https://github.com/$env:GITHUB_REPOSITORY/actions/runs/$env:GITHUB_RUN_ID"
+            runner = 'windows-2022'
+            signed = $false
+            purpose = 'Development test preview, not a version release'
+          } | ConvertTo-Json | Set-Content .local/windows-preview/BUILD.json
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Callside-Windows-Test-x64-${{ github.sha }}
+          path: |
+            .local/windows-preview/Callside-Windows-Test-x64.exe
+            .local/windows-preview/Callside-Windows-Test-x64.zip
+            .local/windows-preview/START_HERE.txt
+            .local/windows-preview/TESTING.md
+            .local/windows-preview/SHA256SUMS.txt
+            .local/windows-preview/BUILD.json
+          if-no-files-found: error
+          compression-level: 0
+          retention-days: 30
