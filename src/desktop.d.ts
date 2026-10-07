@@ -3,6 +3,11 @@ declare global {
   interface Window {
     callsideDesktop?: {
       platform: string;
+      getCaptureStatus?: () => Promise<{
+        packaged: boolean;
+        screenPermission: string;
+        failure: string;
+      }>;
       getTestDiagnostics?: () => Promise<Record<string, unknown>>;
       loadTestState?: () => Promise<Record<string, unknown> | null>;
       saveTestState?: (state: Record<string, unknown>) => Promise<void>;
@@ -19,6 +24,8 @@ declare global {
       onAnswer: (callback: () => void) => () => void;
       setAlwaysOnTop: (enabled: boolean) => Promise<void>;
       getShortcutStatus: () => Promise<{ accelerator: string; registered: boolean }[]>;
+      loadTemplates?: () => Promise<import('../shared/templates').TemplateLibrary | null>;
+      saveTemplates?: (value: import('../shared/templates').TemplateLibrary) => Promise<void>;
       loadTemplate: () => Promise<import('../shared/types').Settings | null>;
       saveTemplate: (settings: import('../shared/types').Settings) => Promise<void>;
       removeTemplate: () => Promise<void>;

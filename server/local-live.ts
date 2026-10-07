@@ -5,7 +5,7 @@ import type { Express } from 'express';
 import { z } from 'zod';
 import type { LocalEngine } from '../shared/local-test.js';
 import { startLocalWhisper, WhisperStartupError } from './local-whisper.js';
-import { ensureWhisperModel, type ModelProgress } from './whisper-model.js';
+import { ensureWhisperModel, hasWhisperModel, type ModelProgress } from './whisper-model.js';
 import { decodeLocalWav } from './local-test-routes.js';
 
 /** Lazy local runtime shared by microphone and system audio, with bounded serialized work. */
@@ -18,9 +18,12 @@ export function attachLocalLive(
 ) {
   let progress: ModelProgress = {
     phase: 'idle',
-    message: 'Whisper model downloads on first setup',
+    message: 'Prepare local audio. Existing model files are reused.',
   };
-  app.get('/api/local/status', (_req, res) => res.json(progress));
+  app.get('/api/local/status', async (_req, res) => {
+    const downloaded = await hasWhisperModel(directory);
+    res.json({ ...progress, downloaded });
+  });
   let engine: (LocalEngine & { close?(): Promise<void> }) | undefined = supplied;
   let loading: Promise<LocalEngine> | undefined;
   let closed = false;

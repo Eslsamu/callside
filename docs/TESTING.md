@@ -28,7 +28,7 @@ Background tests cover voice reference reuse, mixed-speaker turn splitting, over
 npm run test:desktop
 ```
 
-This separate check builds the production application and starts a hidden Electron window with an isolated temporary profile. It verifies the production shell, preload bridge, IPC, demo transcript, answer event, and always-on-top control. It saves a long synthetic template, checks the inline confirmation, restarts the app to verify restoration across different local server ports, resets it, and restarts again to verify removal. It does not use real audio, call OpenAI, or register actual global keyboard shortcuts. The test sends the same IPC event that the native shortcut handler would send, then closes the app and removes its temporary profile.
+This separate check builds the production application and starts a hidden Electron window with an isolated temporary profile. It verifies the production shell, preload bridge, IPC, demo transcript, answer event, and always-on-top control. It saves a long synthetic template, checks the inline confirmation, restarts the app to verify restoration across different local server ports, deletes it, and restarts again to verify removal. It does not use real audio, call OpenAI, or register actual global keyboard shortcuts. The test sends the same IPC event that the native shortcut handler would send and exercises focused F8 down/repeat/up handling, then closes the app and removes its temporary profile.
 
 Passing this check confirms the desktop integration under the tested environment. Actual OS shortcut registration, microphone permissions, and system audio routing still require the real-audio acceptance checks below.
 

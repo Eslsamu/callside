@@ -47,6 +47,10 @@ test('local transcription is the default and runs without an API key or cloud au
   });
   await page.goto('/');
   await page.getByRole('button', { name: 'Settings', exact: true }).click();
+  await page
+    .getByRole('navigation', { name: 'Settings sections' })
+    .getByRole('button', { name: 'Audio', exact: true })
+    .click();
   await expect(page.getByLabel('Transcription processing')).toHaveValue('local');
   await expect(page.getByLabel('Speaker labeling')).toHaveValue('local');
   await expect(
@@ -314,22 +318,42 @@ test('remembered API key controls save, reload without exposing the key, and rem
   });
   await page.reload();
   await page.getByRole('button', { name: 'Settings', exact: true }).click();
+  await page
+    .getByRole('navigation', { name: 'Settings sections' })
+    .getByRole('button', { name: 'Connections', exact: true })
+    .click();
   await expect(page.getByLabel('Remember API key on this device')).toBeChecked();
   await page.getByLabel('OpenAI API key', { exact: true }).fill('sk-synthetic-ui-test-key');
   await page.getByRole('button', { name: 'Save API key', exact: true }).click();
+  await page
+    .getByRole('navigation', { name: 'Settings sections' })
+    .getByRole('button', { name: 'Connections', exact: true })
+    .click();
   await expect(page.getByText('API key saved on this device', { exact: true })).toBeVisible();
   expect(requests[0]).toEqual({ apiKey: 'sk-synthetic-ui-test-key', remember: true });
   await expect(page.getByLabel('OpenAI API key', { exact: true })).toHaveValue('');
   expect(await page.evaluate(() => JSON.stringify(localStorage))).not.toContain('sk-synthetic');
   await page.reload();
   await page.getByRole('button', { name: 'Settings', exact: true }).click();
+  await page
+    .getByRole('navigation', { name: 'Settings sections' })
+    .getByRole('button', { name: 'Connections', exact: true })
+    .click();
   await expect(page.getByText('API key saved on this device', { exact: true })).toBeVisible();
   await expect(page.getByLabel('OpenAI API key', { exact: true })).toHaveValue('');
   await page.getByRole('button', { name: 'Remove API key', exact: true }).click();
+  await page
+    .getByRole('navigation', { name: 'Settings sections' })
+    .getByRole('button', { name: 'Connections', exact: true })
+    .click();
   await expect(page.getByText('No API key added', { exact: true })).toBeVisible();
   expect(requests[1]).toEqual({ apiKey: '', remember: false });
   await page.reload();
   await page.getByRole('button', { name: 'Settings', exact: true }).click();
+  await page
+    .getByRole('navigation', { name: 'Settings sections' })
+    .getByRole('button', { name: 'Connections', exact: true })
+    .click();
   await expect(page.getByText('No API key added', { exact: true })).toBeVisible();
 });
 
@@ -423,6 +447,10 @@ test('live two-channel capture filters microphone echoes in the transcript and e
   expect(exported.transcript).toHaveLength(1);
   expect(exported.transcript[0]).toMatchObject({ source: 'system', speaker: 'Other speaker' });
   await page.getByRole('button', { name: 'Settings', exact: true }).click();
+  await page
+    .getByRole('navigation', { name: 'Settings sections' })
+    .getByRole('button', { name: 'Audio', exact: true })
+    .click();
   await page.getByLabel('Filter microphone echo duplicates').uncheck();
   await page.getByRole('button', { name: 'Conversation', exact: true }).click();
   await expect(page.getByTestId('transcript-entry')).toHaveCount(2);
@@ -639,10 +667,18 @@ test('edited prompts are used in answers and saved only when requested', async (
   const activeSession = page.getByRole('region', { name: 'Active session', exact: true });
   await expect(activeSession).toBeVisible();
   await expect(activeSession.getByRole('button', { name: 'End demo', exact: true })).toBeEnabled();
+  await page
+    .getByRole('navigation', { name: 'Settings sections' })
+    .getByRole('button', { name: 'Audio', exact: true })
+    .click();
   await expect(page.getByText(/^Audio settings are locked during a session\./)).toBeVisible();
   await expect(
     page.getByRole('checkbox', { name: 'Transcribe microphone', exact: true }),
   ).toBeDisabled();
+  await page
+    .getByRole('navigation', { name: 'Settings sections' })
+    .getByRole('button', { name: 'Templates & task', exact: true })
+    .click();
   await page.getByRole('button', { name: 'Save template', exact: true }).click();
   await expect(page.getByTestId('template-feedback')).toContainText('Template saved.');
   await expect(page.getByTestId('template-feedback')).toBeInViewport();
@@ -651,12 +687,13 @@ test('edited prompts are used in answers and saved only when requested', async (
   await expect(page.getByRole('textbox', { name: 'Reference material', exact: true })).toHaveValue(
     'We are planning a two-week test with exactly three participants.',
   );
-  await page.getByRole('button', { name: 'Reset', exact: true }).click();
+  await page.getByRole('button', { name: 'Delete template', exact: true }).click();
+  await page.getByRole('button', { name: 'Confirm delete', exact: true }).click();
   await expect(page.getByRole('textbox', { name: 'Reference material', exact: true })).toHaveValue(
     '',
   );
   expect(await page.evaluate(() => localStorage.getItem('callside.settings.v1'))).toBeNull();
-  await expect(page.getByTestId('template-feedback')).toContainText('saved template removed');
+  await expect(page.getByTestId('template-feedback')).toContainText('Template deleted');
 });
 
 test('a failed template save keeps edits and reports the problem beside the button', async ({
@@ -669,6 +706,10 @@ test('a failed template save keeps edits and reports the problem beside the butt
       throw new DOMException('Storage full', 'QuotaExceededError');
     };
   });
+  await page
+    .getByRole('navigation', { name: 'Settings sections' })
+    .getByRole('button', { name: 'Templates & task', exact: true })
+    .click();
   await page.getByRole('button', { name: 'Save template', exact: true }).click();
   await expect(page.getByTestId('template-feedback')).toContainText('Could not save');
   await expect(page.getByTestId('template-feedback')).toHaveAttribute('role', 'alert');
@@ -842,6 +883,10 @@ test('GPT-6 controls restrict models, normalize Astra reasoning, and persist API
   page,
 }) => {
   await page.getByRole('button', { name: 'Settings', exact: true }).click();
+  await page
+    .getByRole('navigation', { name: 'Settings sections' })
+    .getByRole('button', { name: 'Models', exact: true })
+    .click();
   const model = page.getByRole('combobox', { name: 'Task model', exact: true });
   await expect(model.locator('option')).toHaveText([
     'GPT-6 Luna',
@@ -864,6 +909,10 @@ test('GPT-6 controls restrict models, normalize Astra reasoning, and persist API
   await expect(reasoning.locator('option[value="none"]')).toHaveCount(0);
   await reasoning.selectOption('high');
   await page.getByLabel('Fast mode', { exact: true }).check();
+  await page
+    .getByRole('navigation', { name: 'Settings sections' })
+    .getByRole('button', { name: 'Templates & task', exact: true })
+    .click();
   await page.getByRole('button', { name: 'Save template', exact: true }).click();
   await page.reload();
   await startDemo(page);
@@ -896,16 +945,32 @@ test('Workshop preserves long references, runs before speech, and exports cache 
     }),
   );
   await page.getByRole('button', { name: 'Settings', exact: true }).click();
+  await page
+    .getByRole('navigation', { name: 'Settings sections' })
+    .getByRole('button', { name: 'Templates & task', exact: true })
+    .click();
+  await page.getByLabel('Saved templates', { exact: true }).selectOption('workshop');
   await page.getByLabel('Reference material', { exact: true }).fill(reference);
-  await page.getByRole('button', { name: 'Workshop', exact: true }).click();
+  await page
+    .getByRole('navigation', { name: 'Settings sections' })
+    .getByRole('button', { name: 'Templates & task', exact: true })
+    .click();
   await expect(page.getByLabel('Reference material', { exact: true })).toHaveValue(reference);
   await expect(
     page.getByRole('combobox', { name: 'Automatic trigger source', exact: true }),
   ).toHaveValue('either');
+  await page
+    .getByRole('navigation', { name: 'Settings sections' })
+    .getByRole('button', { name: 'Models', exact: true })
+    .click();
   await page.getByRole('combobox', { name: 'Task model', exact: true }).selectOption('gpt-6.1-sol');
   await page
     .getByRole('combobox', { name: 'Output token limit', exact: true })
     .selectOption('model');
+  await page
+    .getByRole('navigation', { name: 'Settings sections' })
+    .getByRole('button', { name: 'Templates & task', exact: true })
+    .click();
   await page.getByRole('button', { name: 'Save template', exact: true }).click();
   await page.reload();
   await expect(page.getByRole('button', { name: /^Help now/ })).toBeEnabled();
@@ -933,7 +998,15 @@ test('Workshop preserves long references, runs before speech, and exports cache 
     expect.objectContaining({ model: 'gpt-6.1-sol', skipped: false, usage }),
   ]);
   await page.getByRole('button', { name: 'Settings', exact: true }).click();
+  await page
+    .getByRole('navigation', { name: 'Settings sections' })
+    .getByRole('button', { name: 'Templates & task', exact: true })
+    .click();
   await expect(page.getByLabel('Reference material', { exact: true })).toHaveValue(reference);
+  await page
+    .getByRole('navigation', { name: 'Settings sections' })
+    .getByRole('button', { name: 'Templates & task', exact: true })
+    .click();
   await expect(page.getByLabel('Task instructions', { exact: true })).toHaveValue(
     /Participants may move between topics/,
   );
@@ -945,6 +1018,10 @@ test('oversized pasted references are retained and block task requests with a cl
   const reference = 'x'.repeat(100001);
   await page.getByRole('button', { name: 'Settings', exact: true }).click();
   await page.getByLabel('Reference material', { exact: true }).fill(reference);
+  await page
+    .getByRole('navigation', { name: 'Settings sections' })
+    .getByRole('button', { name: 'Templates & task', exact: true })
+    .click();
   await expect(page.getByLabel('Reference material', { exact: true })).toHaveValue(reference);
   await expect(page.getByRole('alert')).toContainText('Your pasted text has been kept in full');
   await page.getByRole('button', { name: 'Conversation', exact: true }).click();
@@ -1016,27 +1093,68 @@ test('ChatGPT sign-in selects plan billing, loads models, and preserves it in te
   });
   await page.goto('/');
   await page.getByRole('button', { name: 'Settings', exact: true }).click();
+  await page
+    .getByRole('navigation', { name: 'Settings sections' })
+    .getByRole('button', { name: 'Connections', exact: true })
+    .click();
   await page.getByRole('button', { name: 'Continue with ChatGPT', exact: true }).click();
+  await page
+    .getByRole('navigation', { name: 'Settings sections' })
+    .getByRole('button', { name: 'Connections', exact: true })
+    .click();
   await expect(page.getByLabel('Pay for suggestions with')).toHaveValue('chatgpt');
+  await expect(page.getByRole('button', { name: 'Save template', exact: true })).toBeHidden();
+  for (const width of [1280, 820]) {
+    await page.setViewportSize({ width, height: 1000 });
+    await page
+      .locator('.chatgpt-actions')
+      .screenshot({ path: `.local/chatgpt-actions-${width}.png` });
+  }
+  await page.setViewportSize({ width: 1280, height: 720 });
+  await page
+    .getByRole('navigation', { name: 'Settings sections' })
+    .getByRole('button', { name: 'Models', exact: true })
+    .click();
   await expect(page.getByRole('combobox', { name: 'Task model', exact: true })).toHaveValue(
     'gpt-6.1-sol',
   );
-  await expect(page.getByLabel('Fast mode', { exact: true })).toBeDisabled();
+  await page.getByLabel('Fast mode', { exact: true }).check();
   await expect(
     page.getByRole('combobox', { name: 'Output token limit', exact: true }),
   ).toBeDisabled();
+  await page
+    .getByRole('navigation', { name: 'Settings sections' })
+    .getByRole('button', { name: 'Templates & task', exact: true })
+    .click();
   await page.getByLabel('Reference material', { exact: true }).fill('Explain this course topic.');
+  await page
+    .getByRole('navigation', { name: 'Settings sections' })
+    .getByRole('button', { name: 'Templates & task', exact: true })
+    .click();
   await page.getByRole('button', { name: 'Save template', exact: true }).click();
   await page.reload();
   await page.getByRole('button', { name: 'Settings', exact: true }).click();
+  await page
+    .getByRole('navigation', { name: 'Settings sections' })
+    .getByRole('button', { name: 'Connections', exact: true })
+    .click();
   await expect(page.getByLabel('Pay for suggestions with')).toHaveValue('chatgpt');
   await page.getByRole('button', { name: 'Conversation', exact: true }).click();
   await page.getByRole('button', { name: /^Help now/ }).click();
   await expect(page.getByTestId('suggestion')).toContainText('Subscription test suggestion');
   expect(payload?.settings.answerBilling).toBe('chatgpt');
+  expect(payload?.settings.fastMode).toBe(true);
   expect(payload?.demo).toBe(false);
   await page.getByRole('button', { name: 'Settings', exact: true }).click();
+  await page
+    .getByRole('navigation', { name: 'Settings sections' })
+    .getByRole('button', { name: 'Connections', exact: true })
+    .click();
   await page.getByRole('button', { name: 'Sign out of ChatGPT', exact: true }).click();
+  await page
+    .getByRole('navigation', { name: 'Settings sections' })
+    .getByRole('button', { name: 'Connections', exact: true })
+    .click();
   await expect(page.getByLabel('Pay for suggestions with')).toHaveValue('chatgpt');
 });
 
@@ -1112,13 +1230,17 @@ test('desktop setup shows model progress without recording and prepares both run
   const wait = new Promise<void>((resolve) => {
     release = resolve;
   });
+  let preparing = false;
   await page.route('**/api/local/prepare', async (route) => {
+    preparing = true;
     await wait;
     await route.fulfill({ json: { ready: true } });
   });
   await page.route('**/api/local/status', (route) =>
     route.fulfill({
-      json: { phase: 'downloading', percent: 37, message: 'Downloading Whisper model' },
+      json: preparing
+        ? { phase: 'downloading', percent: 37, message: 'Downloading speaker model' }
+        : { phase: 'idle', downloaded: true },
     }),
   );
   await page.route('**/api/local-speakers/start', (route) =>
@@ -1131,7 +1253,12 @@ test('desktop setup shows model progress without recording and prepares both run
   });
   await page.goto('/');
   await page.getByRole('button', { name: 'Settings', exact: true }).click();
-  await page.getByRole('button', { name: 'Download and prepare models', exact: true }).click();
+  await page
+    .getByRole('navigation', { name: 'Settings sections' })
+    .getByRole('button', { name: 'Audio', exact: true })
+    .click();
+  await expect(page.getByText('Whisper is already downloaded.', { exact: false })).toBeVisible();
+  await page.getByRole('button', { name: 'Prepare local audio', exact: true }).click();
   await expect(page.getByRole('progressbar', { name: 'Model preparation' })).toHaveAttribute(
     'value',
     '37',
@@ -1142,6 +1269,10 @@ test('desktop setup shows model progress without recording and prepares both run
   release();
   await expect(page.getByRole('button', { name: 'Models ready', exact: true })).toBeDisabled();
   expect(finalized).toBe(true);
+  await page
+    .getByRole('navigation', { name: 'Settings sections' })
+    .getByRole('button', { name: 'App', exact: true })
+    .click();
   await expect(page.getByRole('region', { name: 'Application updates' })).toContainText(
     'Callside 0.6.0',
   );
@@ -1695,4 +1826,131 @@ test('Windows native report save handles cancel and failure before a successful 
   expect(api.unexpected).toEqual([]);
   expect(api.answerRequests).toEqual([]);
   expect(native.template).toEqual(native.priorTemplate);
+});
+
+test('named templates isolate context, preserve drafts, and survive reload', async ({ page }) => {
+  await page.goto('/');
+  await page.getByRole('button', { name: 'Settings', exact: true }).click();
+  const picker = page.getByLabel('Saved templates', { exact: true });
+  const context = page.getByLabel('Reference material', { exact: true });
+  await picker.selectOption('sales');
+  await context.fill('Sales reference only');
+  await page.locator('.template-manager').screenshot({ path: '.local/templates-desktop.png' });
+  await picker.selectOption('interview');
+  await expect(context).toHaveValue('');
+  await context.fill('Interview reference only');
+  await picker.selectOption('sales');
+  await expect(context).toHaveValue('Sales reference only');
+  await page
+    .getByRole('navigation', { name: 'Settings sections' })
+    .getByRole('button', { name: 'Templates & task', exact: true })
+    .click();
+  await page.getByRole('button', { name: 'Save template', exact: true }).click();
+  await expect(page.getByTestId('template-feedback')).toContainText('Template saved');
+  await picker.selectOption('interview');
+  await expect(context).toHaveValue('Interview reference only');
+  await context.fill('Updated interview notes');
+  await page.getByLabel('Template name', { exact: true }).fill('Customer workshop');
+  await page.getByRole('button', { name: 'Save as new', exact: true }).click();
+  await expect(picker.locator('option:checked')).toHaveText('Customer workshop');
+  const copyId = await picker.inputValue();
+  await picker.selectOption('interview');
+  await expect(context).toHaveValue('Updated interview notes');
+  await picker.selectOption(copyId);
+  await page.reload();
+  await page.getByRole('button', { name: 'Settings', exact: true }).click();
+  await expect(context).toHaveValue('Updated interview notes');
+  await picker.selectOption('sales');
+  await expect(context).toHaveValue('Sales reference only');
+  await picker.selectOption('interview');
+  await expect(context).toHaveValue('');
+  await page.getByLabel('Template name', { exact: true }).fill('Interview preparation');
+  await page.getByRole('button', { name: 'Rename', exact: true }).click();
+  await expect(picker.locator('option:checked')).toHaveText('Interview preparation');
+  await page.getByRole('button', { name: 'Delete template', exact: true }).click();
+  await page.getByRole('button', { name: 'Confirm delete', exact: true }).click();
+  await expect(picker.locator('option')).not.toContainText(['Interview preparation']);
+});
+
+test('settings sections show one topic and retain template edits when navigating', async ({
+  page,
+}) => {
+  await page.getByRole('button', { name: 'Settings', exact: true }).click();
+  const sections = page.getByRole('navigation', { name: 'Settings sections' });
+  await expect(page.getByLabel('Reference material', { exact: true })).toBeVisible();
+  await expect(page.getByLabel('OpenAI API key', { exact: true })).not.toBeVisible();
+  await page.getByLabel('Reference material', { exact: true }).fill('Keep across sections');
+  await sections.getByRole('button', { name: 'Audio', exact: true }).click();
+  await expect(page.getByLabel('Transcription processing')).toBeVisible();
+  await expect(page.getByLabel('Reference material', { exact: true })).not.toBeVisible();
+  await sections.getByRole('button', { name: 'Models', exact: true }).click();
+  await expect(page.getByLabel('Fast mode', { exact: true })).toBeVisible();
+  await expect(page.getByLabel('Transcription processing')).not.toBeVisible();
+  await sections.getByRole('button', { name: 'Connections', exact: true }).click();
+  await expect(page.getByLabel('OpenAI API key', { exact: true })).toBeVisible();
+  await sections.getByRole('button', { name: 'Templates & task', exact: true }).click();
+  await expect(page.getByLabel('Reference material', { exact: true })).toHaveValue(
+    'Keep across sections',
+  );
+  await page.screenshot({ path: '.local/settings-sections.png', fullPage: true });
+});
+
+test('results render Markdown and keep incoming text visible without page scrolling', async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 1024, height: 768 });
+  let answer =
+    '# Suggested response\n\n**Important point**\n\n- First item\n- Second item\n\n' +
+    Array.from(
+      { length: 18 },
+      (_, i) => `Paragraph ${i}: A useful explanation with enough detail to fill the result panel.`,
+    ).join('\n\n') +
+    '\n\n```js\nconst ready = true;\n```\n\nFinal recommendation.';
+  await page.route('**/api/answer', (route) =>
+    route.fulfill({
+      contentType: 'text/event-stream',
+      body: `data: ${JSON.stringify({ type: 'delta', text: answer })}\n\ndata: {"type":"done"}\n\n`,
+    }),
+  );
+  await page.goto('/');
+  await startDemo(page);
+  await page.getByRole('button', { name: /^Help now/ }).click();
+  const result = page.getByTestId('suggestion');
+  await expect(result.locator('strong')).toHaveText('Important point');
+  await expect(result.locator('ul li')).toHaveCount(2);
+  await expect(result.locator('pre code')).toContainText('const ready = true;');
+  await expect(result.getByText('Final recommendation.', { exact: true })).toBeInViewport();
+  await expect(result.getByRole('heading', { name: 'Suggested response' })).toBeInViewport();
+  await expect
+    .poll(() =>
+      result.locator('.fitted-result').evaluate((box) => {
+        const content = box.firstElementChild!;
+        return content.scrollHeight <= box.clientHeight && content.scrollWidth <= box.clientWidth;
+      }),
+    )
+    .toBe(true);
+  await page.setViewportSize({ width: 900, height: 680 });
+  await expect(result.getByRole('heading', { name: 'Suggested response' })).toBeInViewport();
+  await expect(result.getByText('Final recommendation.', { exact: true })).toBeInViewport();
+  await page.setViewportSize({ width: 1024, height: 768 });
+  await expect(page.getByRole('button', { name: /^Help now/ })).toBeInViewport();
+  expect(await page.evaluate(() => document.documentElement.scrollHeight <= innerHeight + 1)).toBe(
+    true,
+  );
+  await page.screenshot({ path: '.local/results-markdown-long.png' });
+  await page.getByRole('button', { name: 'Maximize results', exact: true }).click();
+  await expect(page.getByRole('region', { name: 'Live transcript' })).toBeHidden();
+  await expect(page.getByRole('button', { name: 'End demo', exact: true })).toBeInViewport();
+  await expect(result.getByRole('heading', { name: 'Suggested response' })).toBeInViewport();
+  await expect(result.getByText('Final recommendation.', { exact: true })).toBeInViewport();
+  await expect(result.locator('.answer-text')).toHaveCSS('column-count', '1');
+  await page.screenshot({ path: '.local/results-maximized.png' });
+  await page.keyboard.press('Escape');
+  await expect(page.getByRole('region', { name: 'Live transcript' })).toBeVisible();
+  answer =
+    '## Next step\n\nA **short answer** with `code`.\n\n| Topic | Action |\n| --- | --- |\n| Timing | Confirm |';
+  await page.getByRole('button', { name: /^Help now/ }).click();
+  await expect(result.getByRole('heading', { name: 'Next step' })).toBeInViewport();
+  await expect(result.locator('table')).toBeVisible();
+  await page.screenshot({ path: '.local/results-markdown-short.png' });
 });

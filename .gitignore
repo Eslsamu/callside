@@ -15,6 +15,7 @@ playwright-report/
 openai-key.enc
 chatgpt-auth.enc
 template.json
+templates.json
 *.pem
 *.key
 

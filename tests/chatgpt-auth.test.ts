@@ -151,8 +151,14 @@ describe('ChatGPT OAuth connection', () => {
       }),
     );
     expect(await test.auth.listModels()).toEqual([{ id: 'gpt-6.1-sol', name: 'GPT-6.1 Sol' }]);
+    expect(test.auth.status().modelCatalog).toEqual([
+      { id: 'gpt-6.1-sol', name: 'GPT-6.1 Sol', visibility: 'list', supported: true },
+      { id: 'gpt-6-luna', name: 'Luna', visibility: 'hidden', supported: true },
+      { id: 'gpt-4.1-mini', name: 'Old', visibility: 'list', supported: false },
+    ]);
     test.upstream.mockResolvedValueOnce(new Response(null, { status: 200 }));
     await test.auth.disconnect();
+    expect(test.auth.status().modelCatalog).toBeUndefined();
     expect(test.saved()).not.toContain('secret-');
     await test.auth.connect('issued-client');
     expect(test.url().searchParams.get('client_id')).toBe('issued-client');

@@ -4,7 +4,7 @@ import App from './App';
 import WindowsCheck from './WindowsCheck';
 import LocalTest from './LocalTest';
 import ComparisonTest from './ComparisonTest';
-import { loadTemplate } from './template';
+import { loadTemplates } from './template';
 import './styles.css';
 async function render() {
   const windowsCheck = window.location.pathname === '/windows-check';
@@ -12,7 +12,7 @@ async function render() {
   const initial =
     windowsCheck || comparison || window.location.pathname === '/local-test'
       ? null
-      : await loadTemplate();
+      : await loadTemplates();
   ReactDOM.createRoot(document.getElementById('root')!).render(
     <React.StrictMode>
       {windowsCheck ? (
@@ -20,7 +20,11 @@ async function render() {
       ) : comparison ? (
         <ComparisonTest />
       ) : initial ? (
-        <App initialSettings={initial.settings} initialError={initial.error} />
+        <App
+          initialLibrary={initial.library}
+          initialSettings={initial.settings}
+          initialError={initial.error}
+        />
       ) : (
         <LocalTest />
       )}

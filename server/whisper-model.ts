@@ -11,6 +11,14 @@ export interface ModelProgress {
   percent?: number;
   message: string;
 }
+export async function hasWhisperModel(directory = '.local/models'): Promise<boolean> {
+  try {
+    await access(resolve(process.env.WHISPER_MODEL_PATH || `${directory}/${WHISPER_MODEL_NAME}`));
+    return true;
+  } catch {
+    return false;
+  }
+}
 export async function ensureWhisperModel(
   directory = '.local/models',
   progress?: (value: ModelProgress) => void,

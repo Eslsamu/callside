@@ -5,6 +5,9 @@ contextBridge.exposeInMainWorld(
   'callsideDesktop',
   Object.freeze({
     platform: process.platform,
+    getCaptureStatus() {
+      return ipcRenderer.invoke('callside:capture-status');
+    },
     getTestDiagnostics() {
       return ipcRenderer.invoke('callside:test-diagnostics');
     },
@@ -42,6 +45,12 @@ contextBridge.exposeInMainWorld(
     },
     getShortcutStatus() {
       return ipcRenderer.invoke('callside:shortcut-status');
+    },
+    loadTemplates() {
+      return ipcRenderer.invoke('callside:templates-load');
+    },
+    saveTemplates(value) {
+      return ipcRenderer.invoke('callside:templates-save', value);
     },
     loadTemplate() {
       return ipcRenderer.invoke('callside:template-load');

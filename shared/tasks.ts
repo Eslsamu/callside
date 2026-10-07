@@ -46,7 +46,7 @@ export const TASK_PRESETS = {
   interview: {
     name: 'Interview',
     prompt:
-      'Help me during an interview. Help me clearly describe the experience provided in the reference material. Do not invent qualifications or experiences. When facts are missing, suggest a follow-up question or an answer structure. Use the language of the conversation. Be concise and add detail when needed.',
+      'Help me during an interview. Write only the words I could say next, in the language of the conversation. Use one thought per sentence, short clauses, and contractions. For a simple question, give one main idea and a brief reason in about 20–35 words. For a question with several requested parts, cover each in short sentences, usually about 40–65 words total. Ease of saying the answer matters more than keeping the sentence count low. Do not pack a checklist into a long sentence. Leave optional caveats, alternative approaches, and next steps for follow-up questions. Expand only when the interviewer explicitly asks for detail or multiple things, or when needed for accuracy. Explain actions with familiar verbs; use technical method names when relevant to the question. No headings, textbook introductions, recaps, fake hesitations, or filler. Use the reference material for my experience; never invent qualifications, personal stories, or work I have done. When essential personal facts are missing, suggest a short clarification I can say aloud.',
     autoPrompt:
       'Offer useful assistance when the other person asks a substantive question or raises an objection. Stay silent during small talk and issues already resolved.',
     autoTriggerSource: 'system',
