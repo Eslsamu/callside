@@ -1,5 +1,13 @@
 # Windows guided hardware test
 
+## Download an auditable GitHub Actions test build
+
+Open the **Windows test build** workflow under the repository's Actions tab. Select a successful run and download its `Callside-Windows-Test-x64-<commit>` artifact (GitHub sign-in is required). Extract the artifact ZIP and read `START_HERE.txt`. Run the included `.exe` installer, or extract the nested portable `.zip` completely and run `Callside.exe`.
+
+The artifact includes `BUILD.json` with the exact source commit and workflow run, plus `SHA256SUMS.txt`. It is built on a GitHub-hosted Windows runner from the public source, not uploaded from a maintainer's computer. It remains unsigned: provenance does not guarantee safety or remove Windows security warnings. If blocked, report the warning without disabling security software. Artifacts expire after 30 days; no release or version bump is created.
+
+Developers can reproduce the preview on Windows with Git, Node.js 22.12 or newer, CMake and Visual Studio C++ build tools: run `npm ci`, then `node --import tsx --input-type=module -e "import { ensureWhisperModel } from './server/whisper-model.ts'; await ensureWhisperModel();"`, then `npm run desktop:windows-preview -- --test-package`. The workflow shows the same build commands. The model download is checksum-verified.
+
 This development preview targets Windows 11 on Intel/AMD x64 PCs with AVX2, FMA and F16C. It is not a version release or a claim of general Windows support. Windows on ARM and older CPUs are outside this preview.
 
 ## One tester session

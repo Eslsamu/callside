@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Add a GitHub Actions Windows test build with bundled local models, guided test instructions, checksums and source-commit provenance. This produces a development artifact, not a release.
+
 - Add named templates with independent reference material and settings, copy/rename/delete controls, and migration of the previous saved setup.
 - Split Settings into Templates & task, Models, Audio, Connections, and App. Show Save template only in Templates & task and space ChatGPT account actions consistently.
 - Render Markdown in current and previous results. Fit the full current answer to the panel, resize it with the window, and offer a maximize/restore button with a single reading column. Escape restores the transcript layout.
