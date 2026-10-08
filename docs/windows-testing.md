@@ -1,6 +1,6 @@
 # Windows guided hardware test
 
-See [the October 8 QA findings and focused retest](windows-qa-2026-10-08.md) for the first two-machine results, fixes in the current source, and remaining blockers. Older preview artifacts do not contain those fixes.
+See [the October 8 QA findings and focused retest](windows-qa-2026-10-08.md) for the three-machine results, fixes in the current source, and remaining blockers. Older preview artifacts do not contain those fixes.
 
 ## Download an auditable GitHub Actions test build
 
@@ -17,9 +17,9 @@ This development preview targets Windows 11 on Intel/AMD x64 PCs with AVX2, FMA 
 Run `Callside-Windows-Test-x64.exe`. The installer works per user, creates a shortcut, and opens the guided test. No developer tools, API key or separate model download is needed. A current eligible ChatGPT subscription is needed only for the answer test. Allow approximately 10–15 minutes after initial model loading; a short call with a second person can be included in the same session.
 
 1. Prepare the bundled Whisper model and enable test capture. Refresh the microphone list and select your headset or built-in input if the Windows default does not work.
-2. Read the microphone sentence; play the computer-audio sentence. Review each transcript for substantial errors.
+2. Read the English microphone sentence; play the computer-audio sentence. Review each transcript for substantial errors.
 3. Play the four-speaker meeting excerpt while both sources are captured. Remain silent during playback, then read the microphone reply. Review text, source separation/echo and speaker consistency.
-4. Make a short call in the usual call app. Take turns saying non-private test sentences. This step checks real call-device routing; it can be skipped if no partner is available.
+4. Make a test call in the usual call app. Choose the 90-second quick check or 30-minute sustained-capture limit. Take turns saying non-private test sentences. This step checks real call-device routing; it can be skipped if no partner is available.
 5. Check F8 or Ctrl+Shift+Space with another window active. Sign in to the tester's own ChatGPT account, choose an available model and request one suggestion using the button or armed global shortcut. Review usefulness and speed.
 6. Save progress and restart. The app checks retained settings, encrypted storage and, if previously connected, the ChatGPT connection. Previous template settings are restored.
 7. Save the JSON report and return it manually. A failed or skipped check never counts as a pass and does not prevent other checks.

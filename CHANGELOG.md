@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Windows guided QA now uses English test speech, offers a 30-minute sustained-call check, and uses the captured call for follow-up answer checks.
+
 - Add a real CPU-only Whisper fixture check to the Windows build workflow, exercising the packaged executable and serialized simultaneous requests, with retained timing and qualitative transcript evidence.
 
 - Address Windows QA findings: select a microphone directly in the guided test, keep transcription errors visible during stop, reduce repeated local decoding on Windows, and drain captured speech on overload. Include local inference timing and empty results in test reports.

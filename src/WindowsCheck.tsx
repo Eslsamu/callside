@@ -100,7 +100,7 @@ const emptyAnswer = (): Answer => ({
   requestCount: 0,
 });
 const phrases = {
-  mic: 'Dies ist der Mikrofontest. Heute testen wir Callside unter Windows.',
+  mic: 'This is the microphone test. Today we are testing Callside on Windows.',
   system: "Euros, which I don't actually know what that is in Pounds, at all. Any ideas?",
 };
 const labels: Record<AudioCheck, string> = {
@@ -167,6 +167,7 @@ export default function WindowsCheck() {
   const [authBusy, setAuthBusy] = useState(false),
     [authMessage, setAuthMessage] = useState('');
   const [model, setModel] = useState('');
+  const [callLimitMs, setCallLimitMs] = useState(90000);
   const [notes, setNotes] = useState(''),
     [headphones, setHeadphones] = useState('speakers');
   const [speakerEnabled, setSpeakerEnabled] = useState(true);
@@ -574,7 +575,7 @@ export default function WindowsCheck() {
       const handle = await startCapture(
         {
           ...DEFAULT_SETTINGS,
-          language: combined ? '' : check === 'system' ? 'en' : 'de',
+          language: combined ? '' : 'en',
           transcriptionProvider: 'local',
           diarizationProvider: combined && speakerEnabled ? 'local' : 'off',
           backgroundSpeakers: combined && speakerEnabled,
@@ -682,7 +683,7 @@ export default function WindowsCheck() {
           clearInterval(cueTimer.current);
           setCue(
             check === 'conversation'
-              ? 'Your turn: Ich habe die Stimmen gehört. Bitte fassen Sie das Gespräch kurz zusammen.'
+              ? 'Your turn: I heard the speakers. Please summarize the conversation briefly.'
               : 'Finishing…',
           );
           timer.current = setTimeout(() => void finish(), check === 'conversation' ? 8500 : 1600);
@@ -705,7 +706,7 @@ export default function WindowsCheck() {
           cueTimer.current = setInterval(updateCue, 200);
         }
         timer.current = setTimeout(() => void finish(), check === 'system' ? 20000 : 80000);
-      } else timer.current = setTimeout(() => void finish(), check === 'mic' ? 11000 : 90000);
+      } else timer.current = setTimeout(() => void finish(), check === 'mic' ? 11000 : callLimitMs);
     } catch (error) {
       commit(check, {
         ...report.current[check],
@@ -740,11 +741,13 @@ export default function WindowsCheck() {
           : 'Complete the remaining review questions.',
     });
   }
-  const answerTranscript = results.conversation.entries.length
-    ? results.conversation.entries
-    : results.system.entries.length
-      ? results.system.entries
-      : results.mic.entries;
+  const answerTranscript = results.call.entries.length
+    ? results.call.entries
+    : results.conversation.entries.length
+      ? results.conversation.entries
+      : results.system.entries.length
+        ? results.system.entries
+        : results.mic.entries;
   async function runAnswer() {
     if (busy || answerAbort.current || !chatgpt?.connected || !model || !answerTranscript.length)
       return;
@@ -780,7 +783,7 @@ export default function WindowsCheck() {
             fastMode: false,
             maxOutputTokens: null,
             context:
-              'This is a desktop call-assistant test. The transcript comes from a desktop audio test and a licensed meeting recording. Reply in German with one short, useful sentence.',
+              'This is a desktop call-assistant test. The transcript comes from a desktop audio test and a licensed meeting recording. Reply in English with one short, useful sentence.',
             systemPrompt:
               'Suggest the next useful sentence the microphone speaker could say, based on the transcript. Give only the suggested sentence, without a preamble.',
           },
@@ -1257,7 +1260,7 @@ export default function WindowsCheck() {
         </p>
         <p>
           Your reply after playback:{' '}
-          <strong>Ich habe die Stimmen gehört. Bitte fassen Sie das Gespräch kurz zusammen.</strong>
+          <strong>I heard the speakers. Please summarize the conversation briefly.</strong>
         </p>
         <details className="check-reference">
           <summary>Reference voices and recording credit</summary>
@@ -1308,13 +1311,24 @@ export default function WindowsCheck() {
         <p>
           For a full check, open a short test call in WhatsApp, Teams, Zoom, or your usual app. Tell
           the other person this is a transcription test. Take turns saying a few non-private
-          sentences, then click Finish call test. It stops after 90 seconds at the latest.
+          sentences, then click Finish call test. Capture stops at the selected time limit.
         </p>
         <p className="field-help">
           This tests audio from a real call app. The recorded conversation above cannot verify its
           device routing. Skip if nobody is available; the report will state that this was not
           tested.
         </p>
+        <label>
+          Call test time limit
+          <select
+            value={callLimitMs}
+            disabled={busy}
+            onChange={(event) => setCallLimitMs(Number(event.target.value))}
+          >
+            <option value={90000}>90 seconds — quick check</option>
+            <option value={1800000}>30 minutes — sustained capture</option>
+          </select>
+        </label>
         <div className="check-actions">
           <button
             className="secondary-button"
