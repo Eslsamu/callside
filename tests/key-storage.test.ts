@@ -85,7 +85,9 @@ describe('persistent API key', () => {
       keyStorage: { saved: true },
     });
     expect((await readFile(f.file)).toString()).not.toContain(key);
-    expect((await stat(f.file)).mode & 0o777).toBe(0o600);
+    // Windows uses ACLs rather than POSIX owner/group permission bits.
+    // Ciphertext and restart checks above/below remain required on every OS.
+    if (process.platform !== 'win32') expect((await stat(f.file)).mode & 0o777).toBe(0o600);
     await first.close();
     const second = await server(createKeyStore(f.file, f.encryption, 'darwin'));
     expect(second.bootstrap).toMatchObject({ hasApiKey: true, keyStorage: { saved: true } });
