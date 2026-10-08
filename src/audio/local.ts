@@ -56,6 +56,7 @@ export class LocalSpeechPipeline {
     private transcribe: Transcribe,
     private callbacks: Callbacks,
     private now = () => performance.now(),
+    private options: { drafts?: boolean; measureEmptyResults?: boolean } = {},
   ) {}
 
   feed(samples: Int16Array) {
@@ -75,7 +76,8 @@ export class LocalSpeechPipeline {
     this.chunks.push(...activity.audio);
     this.size += activity.audio.reduce((n, part) => n + part.length, 0);
     if (activity.commit) this.commit();
-    else if (this.size >= 19200 && now - this.lastDraft >= 800) this.enqueue(false);
+    else if (this.options.drafts !== false && this.size >= 19200 && now - this.lastDraft >= 800)
+      this.enqueue(false);
   }
 
   private enqueue(final: boolean) {
@@ -89,11 +91,18 @@ export class LocalSpeechPipeline {
       const draft = this.queue.findIndex((item) => !item.final);
       this.queue.splice(draft < 0 ? this.queue.length : draft, 0, job);
     } else this.queue.push(job);
-    if (this.queue.filter((item) => item.final).length > 4) {
-      this.fail(
-        'The local model cannot keep up on this device. Recording stopped. Try fewer audio sources or a smaller local model.',
+    const backlogMs = this.queue
+      .filter((item) => item.final)
+      .reduce((ms, item) => ms + item.audio.length / 16, 0);
+    if (backlogMs > 60_000) {
+      // Stop accepting new audio but drain captured speech instead of canceling and losing it.
+      this.ended = true;
+      this.current = undefined;
+      this.chunks = [];
+      this.size = 0;
+      this.callbacks.onError(
+        'Local transcription is over a minute behind. Capture stopped; finishing the captured speech. Try one audio source, disable local speaker labeling, or use cloud transcription if configured.',
       );
-      return;
     }
     void this.pump();
   }
@@ -127,21 +136,28 @@ export class LocalSpeechPipeline {
       const result = await this.transcribe(job.audio, this.abort.signal);
       if (this.abort.signal.aborted) return;
       const displayedAt = this.now();
+      // Once decoding cannot keep up with audio, spend work on final phrases only.
+      if (displayedAt - requestedAt > job.audio.length / 16) {
+        this.options = { ...this.options, drafts: false };
+        this.queue = this.queue.filter((item) => item.final);
+      }
       const text = result.text.trim();
-      let measurement: LocalMeasurement | undefined;
       if (text) {
         if (!this.firstText.has(job.id)) this.firstText.set(job.id, displayedAt - job.startedAt);
-        measurement = {
-          turnId: job.id,
-          final: job.final,
-          audioMs: job.audio.length / 16,
-          processingMs: result.processingMs,
-          requestMs: displayedAt - requestedAt,
-          queueMs: requestedAt - job.queuedAt,
-          speechToTextMs: displayedAt - job.speechAt,
-          firstTextMs: this.firstText.get(job.id)!,
-        };
       }
+      const measurement: LocalMeasurement | undefined =
+        text || this.options.measureEmptyResults
+          ? {
+              turnId: job.id,
+              final: job.final,
+              audioMs: job.audio.length / 16,
+              processingMs: result.processingMs,
+              requestMs: displayedAt - requestedAt,
+              queueMs: requestedAt - job.queuedAt,
+              speechToTextMs: displayedAt - job.speechAt,
+              firstTextMs: this.firstText.get(job.id) ?? 0,
+            }
+          : undefined;
       this.callbacks.onTurn({
         id: job.id,
         text,

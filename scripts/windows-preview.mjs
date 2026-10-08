@@ -3,7 +3,8 @@ import { spawnSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import { createReadStream } from 'node:fs';
 const args = process.argv.slice(2);
-if (!args.includes('--test-package'))
+const checkOnly = args.includes('--check-only');
+if (!checkOnly && !args.includes('--test-package'))
   throw Error(
     'Use --test-package only when a shareable Windows preview has been requested. This does not create a version release.',
   );
@@ -33,8 +34,7 @@ run('npx', [
   '--config',
   'scripts/windows-preview.cjs',
   '--win',
-  'nsis',
-  'zip',
+  ...(checkOnly ? ['--dir'] : ['nsis', 'zip']),
   '--x64',
   '--publish',
   'never',

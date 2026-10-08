@@ -115,6 +115,11 @@ export interface Bootstrap {
   keyStorage?: { canRemember: boolean; saved: boolean; error?: string };
 }
 export interface CaptureCallbacks {
+  onLocalMeasurement?: (
+    source: Source,
+    measurement: import('./local-test.js').LocalMeasurement,
+    empty: boolean,
+  ) => void;
   onTranscript: (entry: TranscriptEntry) => void;
   onAttribution?: (result: SpeakerAttribution) => void;
   onAttributionStatus?: (status: string) => void;

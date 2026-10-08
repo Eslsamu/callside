@@ -7,6 +7,7 @@ import { setTimeout as delay } from 'node:timers/promises';
 import type { LocalEngine } from '../shared/local-test.js';
 
 export class WhisperStartupError extends Error {}
+export class WhisperInferenceError extends Error {}
 
 async function unusedPort(): Promise<number> {
   const socket = createServer();
@@ -33,6 +34,7 @@ async function terminate(child: ChildProcess): Promise<void> {
 export async function startLocalWhisper(
   modelPath: string,
   bundledBinary?: string,
+  options: { cpuOnly?: boolean } = {},
 ): Promise<LocalEngine & { close(): Promise<void> }> {
   try {
     await access(modelPath);
@@ -63,6 +65,7 @@ export async function startLocalWhisper(
   const child = spawn(
     binary || 'whisper-server',
     [
+      ...(options.cpuOnly ? ['--no-gpu'] : []),
       '--model',
       resolve(modelPath),
       '--host',
@@ -159,6 +162,12 @@ export async function startLocalWhisper(
         if (typeof result.text !== 'string')
           throw new Error('Local Whisper returned an invalid transcript.');
         return { text: result.text.trim(), processingMs: Math.round(performance.now() - started) };
+      } catch (error) {
+        if (error instanceof Error && error.name === 'TimeoutError')
+          throw new WhisperInferenceError(
+            'Local Whisper exceeded 30 seconds for one phrase. Try one audio source and turn off local speaker labeling, or configure cloud transcription. No cloud fallback was used.',
+          );
+        throw error;
       } finally {
         busy = false;
       }

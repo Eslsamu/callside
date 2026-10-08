@@ -1,0 +1,42 @@
+name: Windows preflight checks
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [codex/windows-preflight]
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: windows-2022
+    timeout-minutes: 45
+    env:
+      OPENAI_API_KEY: ''
+      CSC_IDENTITY_AUTO_DISCOVERY: 'false'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: Check application logic before packaging
+        run: npm test
+      - name: Download and verify the pinned Whisper model
+        run: node --import tsx --input-type=module -e "import { ensureWhisperModel } from './server/whisper-model.ts'; await ensureWhisperModel();"
+      - name: Build native runtimes and unpacked app only
+        run: npm run desktop:windows-preview -- --check-only
+      - name: Check desktop test flow without microphones or paid APIs
+        run: node tests/windows-desktop-smoke.mjs
+      - name: Test real packaged Whisper inference and simultaneous requests on CPU
+        run: node --import tsx scripts/check-local-inference.ts
+      - name: Keep native inference evidence even if the check fails
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: Windows-native-inference-${{ github.sha }}
+          path: .local/windows-qa/native-inference.json
+          if-no-files-found: warn
+          retention-days: 30

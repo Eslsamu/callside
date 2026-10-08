@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+- Add a real CPU-only Whisper fixture check to the Windows build workflow, exercising the packaged executable and serialized simultaneous requests, with retained timing and qualitative transcript evidence.
+
+- Address Windows QA findings: select a microphone directly in the guided test, keep transcription errors visible during stop, reduce repeated local decoding on Windows, and drain captured speech on overload. Include local inference timing and empty results in test reports.
+- Distinguish ChatGPT initial sign-in, temporary connection failures, and revoked refresh tokens; retain registration for reconnection and record asynchronous sign-in failures in Windows QA reports.
+
+- Add a Language buddy template for selective wording help and corrections while learning a language in conversation. Existing libraries receive it once without replacing saved templates or the active setup. Document practical use cases and language-practice setup in the README.
+
 - Add a GitHub Actions Windows test build with bundled local models, guided test instructions, checksums and source-commit provenance. This produces a development artifact, not a release.
 
 - Add named templates with independent reference material and settings, copy/rename/delete controls, and migration of the previous saved setup.

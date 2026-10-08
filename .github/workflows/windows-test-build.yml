@@ -26,12 +26,24 @@ jobs:
           node-version: 22
           cache: npm
       - run: npm ci
+      - name: Check application logic before packaging
+        run: npm test
       - name: Download and verify the pinned Whisper model
         run: node --import tsx --input-type=module -e "import { ensureWhisperModel } from './server/whisper-model.ts'; await ensureWhisperModel();"
       - name: Build native runtimes and test packages from this commit
         run: npm run desktop:windows-preview -- --test-package
       - name: Check desktop test flow without microphones or paid APIs
         run: node tests/windows-desktop-smoke.mjs
+      - name: Test real packaged Whisper inference and simultaneous requests on CPU
+        run: node --import tsx scripts/check-local-inference.ts
+      - name: Keep native inference evidence even if the check fails
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: Windows-native-inference-${{ github.sha }}
+          path: .local/windows-qa/native-inference.json
+          if-no-files-found: warn
+          retention-days: 30
       - name: Include instructions and build provenance
         shell: pwsh
         run: |

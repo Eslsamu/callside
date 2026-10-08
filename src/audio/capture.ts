@@ -26,7 +26,9 @@ function captureError(error: unknown): Error {
       'Audio access was denied. Allow microphone and system audio in system settings and restart recording.',
     );
   if (error.name === 'NotFoundError')
-    return new Error('The selected audio input is unavailable. Select another device.');
+    return new Error(
+      'The selected audio input is unavailable. Select a connected microphone, check the operating system default input and microphone permissions, then retry.',
+    );
   if (error.name === 'NotReadableError')
     return new Error(
       'Could not open the audio input. Check the device and its system permissions.',
@@ -90,10 +92,11 @@ export async function startCapture(
     return stopPromise;
   };
   const fail = (message: string) => {
-    if (failed || stopping) return;
+    // Final inference can fail after capture stops. Keep that error visible to the report.
+    if (failed) return;
     failed = true;
     callbacks.onError(message);
-    if (initialized) void stop();
+    if (initialized && !stopping) void stop();
   };
 
   const acquire = async (source: Source, request: Promise<MediaStream>) => {

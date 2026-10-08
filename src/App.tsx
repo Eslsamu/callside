@@ -652,6 +652,7 @@ export default function App({
                 : t,
             );
     const next: TemplateLibrary = {
+      ...library,
       version: 2,
       activeId: action === 'delete' ? templates[0].id : id,
       templates,

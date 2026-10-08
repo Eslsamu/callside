@@ -30,6 +30,14 @@ const stateSchema = z.object({
 });
 type Account = z.infer<typeof accountSchema>;
 type State = z.infer<typeof stateSchema>;
+class TokenExchangeError extends PublicError {
+  constructor(
+    message: string,
+    readonly unusableRefresh = false,
+  ) {
+    super(message);
+  }
+}
 export interface SecretStore {
   load(): Promise<string | null>;
   save(value: string): Promise<void>;
@@ -272,14 +280,46 @@ export class ChatGPTAuth {
     }
   }
   private async exchange(fields: Record<string, string>) {
+    const refreshing = fields.grant_type === 'refresh_token';
+    const stage = refreshing ? 'renewal' : 'sign-in';
     const response = await this.fetcher(`${AUTH}/api/accounts/oauth/token`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
       body: new URLSearchParams(fields),
       signal: AbortSignal.timeout(15000),
+    }).catch(() => {
+      throw new TokenExchangeError(
+        `ChatGPT ${stage} could not reach OpenAI. Check your connection and retry. Saved accounts have not been removed.`,
+      );
     });
-    if (!response.ok)
-      throw new PublicError('ChatGPT authorization could not be renewed. Reconnect in Settings.');
+    if (!response.ok) {
+      const body = await response.json().catch(() => null);
+      const code = typeof body?.error === 'string' ? body.error : body?.error?.code;
+      // Do not expose raw OAuth bodies, which may contain credentials or personal data.
+      const unusable = [
+        'invalid_grant',
+        'invalid_refresh_token',
+        'token_expired',
+        'refresh_token_expired',
+        'refresh_token_invalidated',
+        'refresh_token_reused',
+      ].includes(code);
+      const detail = `HTTP ${response.status}${unusable || code === 'invalid_client' ? `, ${code}` : ''}`;
+      if (response.status === 429 || response.status >= 500)
+        throw new TokenExchangeError(
+          `ChatGPT ${stage} is temporarily unavailable (${detail}). Try again later. Saved accounts have not been removed.`,
+        );
+      if (code === 'invalid_client')
+        throw new TokenExchangeError(
+          `ChatGPT rejected this app's client registration (${detail}). Report this connection error; repeated sign-in attempts may not help.`,
+        );
+      throw new TokenExchangeError(
+        refreshing
+          ? `ChatGPT authorization renewal failed (${detail}). ${unusable ? 'Reconnect in Settings.' : 'Check account access and retry; report this error if it persists.'}`
+          : `ChatGPT sign-in could not be completed (${detail}). Start sign-in again; report this error if it persists.`,
+        refreshing && unusable,
+      );
+    }
     return z
       .object({
         access_token: z.string().min(1),
@@ -330,9 +370,20 @@ export class ChatGPTAuth {
         account.credentials = credentials;
         await this.persist();
         return credentials.access;
-      })().finally(() => {
-        this.refreshing = undefined;
-      });
+      })()
+        .catch(async (error) => {
+          if (error instanceof TokenExchangeError && error.unusableRefresh) {
+            account.credentials = undefined;
+            this.models = [];
+            this.modelCatalog = undefined;
+            this.error = error.message;
+            await this.persist();
+          }
+          throw error;
+        })
+        .finally(() => {
+          this.refreshing = undefined;
+        });
     return this.refreshing;
   }
   async listModels() {

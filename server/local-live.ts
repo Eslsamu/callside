@@ -4,7 +4,7 @@ import { WHISPER_MODEL_NAME } from './whisper-model.js';
 import type { Express } from 'express';
 import { z } from 'zod';
 import type { LocalEngine } from '../shared/local-test.js';
-import { startLocalWhisper, WhisperStartupError } from './local-whisper.js';
+import { startLocalWhisper, WhisperStartupError, WhisperInferenceError } from './local-whisper.js';
 import { ensureWhisperModel, hasWhisperModel, type ModelProgress } from './whisper-model.js';
 import { decodeLocalWav } from './local-test-routes.js';
 
@@ -128,11 +128,13 @@ export function attachLocalLive(
     tail = job;
     try {
       res.json(await job);
-    } catch {
+    } catch (error) {
       if (!res.destroyed)
         res.status(502).json({
           error:
-            'Local transcription failed. Restart recording. No audio was sent to a cloud provider.',
+            error instanceof WhisperInferenceError
+              ? error.message
+              : 'Local transcription failed. Restart recording. No audio was sent to a cloud provider.',
         });
     } finally {
       queued--;

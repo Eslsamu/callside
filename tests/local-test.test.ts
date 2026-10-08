@@ -138,6 +138,75 @@ describe('local Whisper test boundary', () => {
 });
 
 describe('live local speech pipeline', () => {
+  it('avoids repeated draft inference on CPUs and preserves more than four short queued phrases', async () => {
+    let time = 0;
+    let release!: () => void;
+    const blocked = new Promise<void>((done) => {
+      release = done;
+    });
+    const turns: LocalTurn[] = [];
+    const onError = vi.fn();
+    const transcribe = vi.fn(async () => {
+      await blocked;
+      return { text: 'phrase', processingMs: 100 };
+    });
+    const pipeline = new LocalSpeechPipeline(
+      transcribe,
+      {
+        onTurn: (turn) => turns.push(turn),
+        onError,
+        onLevel: () => {},
+        onStatus: () => {},
+      },
+      () => time,
+      { drafts: false },
+    );
+    for (let phrase = 0; phrase < 8; phrase++) {
+      for (let frame = 0; frame < 40; frame++) {
+        time += 50;
+        pipeline.feed(new Int16Array(800).fill(frame < 25 ? 3000 : 0));
+      }
+    }
+    expect(transcribe).toHaveBeenCalledTimes(1);
+    expect(onError).not.toHaveBeenCalled();
+    const finished = pipeline.finish();
+    release();
+    await finished;
+    expect(turns).toHaveLength(8);
+    expect(turns.every((turn) => turn.final)).toBe(true);
+  });
+
+  it('drains queued speech after reaching the backlog limit instead of discarding it', async () => {
+    let time = 0;
+    let release!: () => void;
+    const blocked = new Promise<void>((done) => {
+      release = done;
+    });
+    const turns: LocalTurn[] = [];
+    const onError = vi.fn();
+    const pipeline = new LocalSpeechPipeline(
+      async (_audio, signal) => {
+        await blocked;
+        expect(signal.aborted).toBe(false);
+        return { text: 'captured speech', processingMs: 100 };
+      },
+      { onTurn: (turn) => turns.push(turn), onError, onLevel: () => {}, onStatus: () => {} },
+      () => time,
+      { drafts: false },
+    );
+    for (let i = 0; i < 2000; i++) {
+      time += 50;
+      pipeline.feed(new Int16Array(800).fill(3000));
+    }
+    expect(onError).toHaveBeenCalledOnce();
+    expect(onError.mock.calls[0][0]).toContain('finishing the captured speech');
+    const finished = pipeline.finish();
+    release();
+    await finished;
+    expect(turns.length).toBeGreaterThan(5);
+    expect(turns.every((turn) => turn.final)).toBe(true);
+  });
+
   it('coalesces drafts, preserves final turns under load, and drains the last words on stop', async () => {
     let time = 0;
     const pending: ((result: { text: string; processingMs: number }) => void)[] = [];

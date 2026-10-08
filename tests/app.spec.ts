@@ -1594,6 +1594,58 @@ async function prepareWindows(page: Page) {
     .check();
 }
 
+test('Windows microphone selection reaches capture and inference errors during stop survive in the report', async ({
+  page,
+}) => {
+  test.setTimeout(25000);
+  await windowsDesktop(page);
+  await windowsAPI(page);
+  let release!: () => void;
+  const blocked = new Promise<void>((done) => {
+    release = done;
+  });
+  let requested = false;
+  await page.route('**/api/local/transcribe', async (route) => {
+    requested = true;
+    await blocked;
+    await route.fulfill({
+      status: 502,
+      json: { error: 'Local Whisper exceeded 30 seconds for one phrase.' },
+    });
+  });
+  await prepareWindows(page);
+  await page.evaluate(() => {
+    Object.defineProperty(navigator.mediaDevices, 'enumerateDevices', {
+      configurable: true,
+      value: async () => [{ kind: 'audioinput', deviceId: 'PRIVATE-MIC-ID', label: 'USB headset' }],
+    });
+    const acquire = navigator.mediaDevices.getUserMedia.bind(navigator.mediaDevices);
+    Object.defineProperty(navigator.mediaDevices, 'getUserMedia', {
+      configurable: true,
+      value: (constraints: MediaStreamConstraints) => {
+        (window as any).__micConstraints = constraints;
+        return acquire(constraints);
+      },
+    });
+  });
+  await page.getByRole('button', { name: 'Refresh microphone list' }).click();
+  await page
+    .getByRole('combobox', { name: 'Microphone input', exact: true })
+    .selectOption('PRIVATE-MIC-ID');
+  await page.getByRole('button', { name: 'Test microphone', exact: true }).click();
+  await expect.poll(() => requested).toBe(true);
+  expect(await page.evaluate(() => (window as any).__micConstraints.audio.deviceId.exact)).toBe(
+    'PRIVATE-MIC-ID',
+  );
+  await page.getByRole('button', { name: 'Stop test', exact: true }).click();
+  release();
+  await expect(page.getByRole('button', { name: 'Test microphone', exact: true })).toBeEnabled();
+  const report = await windowsReport(page);
+  expect(report.checks.mic.state).toBe('fail');
+  expect(report.checks.mic.errors).toContain('Local Whisper exceeded 30 seconds for one phrase.');
+  expect(JSON.stringify(report)).not.toContain('PRIVATE-MIC-ID');
+});
+
 test('Windows quick check captures each source and exports diagnostics without credentials', async ({
   page,
 }) => {
@@ -1617,6 +1669,7 @@ test('Windows quick check captures each source and exports diagnostics without c
   const report = await windowsReport(page);
   expect(report.checks.mic.state).toBe('pass');
   expect(report.checks.system.state).toBe('pass');
+  expect(report.checks.system.localInference.length).toBeGreaterThan(0);
   expect(report.checks.conversation.state).toBe('not-run');
   expect(report.environment.ramGB).toBe(32);
   expect(api.speechRequests.length).toBeGreaterThan(2);

@@ -1,5 +1,7 @@
 # Windows guided hardware test
 
+See [the October 8 QA findings and focused retest](windows-qa-2026-10-08.md) for the first two-machine results, fixes in the current source, and remaining blockers. Older preview artifacts do not contain those fixes.
+
 ## Download an auditable GitHub Actions test build
 
 Open the **Windows test build** workflow under the repository's Actions tab. Select a successful run and download its `Callside-Windows-Test-x64-<commit>` artifact (GitHub sign-in is required). Extract the artifact ZIP and read `START_HERE.txt`. Run the included `.exe` installer, or extract the nested portable `.zip` completely and run `Callside.exe`.
@@ -14,7 +16,7 @@ This development preview targets Windows 11 on Intel/AMD x64 PCs with AVX2, FMA 
 
 Run `Callside-Windows-Test-x64.exe`. The installer works per user, creates a shortcut, and opens the guided test. No developer tools, API key or separate model download is needed. A current eligible ChatGPT subscription is needed only for the answer test. Allow approximately 10–15 minutes after initial model loading; a short call with a second person can be included in the same session.
 
-1. Prepare the bundled Whisper model and enable test capture.
+1. Prepare the bundled Whisper model and enable test capture. Refresh the microphone list and select your headset or built-in input if the Windows default does not work.
 2. Read the microphone sentence; play the computer-audio sentence. Review each transcript for substantial errors.
 3. Play the four-speaker meeting excerpt while both sources are captured. Remain silent during playback, then read the microphone reply. Review text, source separation/echo and speaker consistency.
 4. Make a short call in the usual call app. Take turns saying non-private test sentences. This step checks real call-device routing; it can be skipped if no partner is available.
@@ -30,9 +32,11 @@ The preview uses separate `Callside Windows Test` application data and does not 
 
 - Whisper large-v3-turbo-q5_0, with a checksum-verified 574 MB model. The Windows executable uses CPU inference, is statically linked, and does not require the tester to install Visual C++ runtime libraries. It runs without a console window.
 - Experimental LS-EEND AMI speaker labeling in an isolated worker using single-threaded ONNX Runtime WASM. The pinned model is included. No Python, GPU, model account, or paid service is required. Four anonymous remote voices are supported. Labels are estimates; overlapping turns may remain ambiguous. Microphone identity comes from the input source rather than voice recognition.
-- The individual system test is a locally generated German sentence. The combined test uses 50 seconds of the AMI Meeting Corpus, ES2004a, under CC BY 4.0. Its exact attribution, reference cues and known limits are in `public/windows-speakers-test.json` and `public/windows-speakers-test-LICENSE.txt`.
+- The individual system test is a short English sentence about euros and pounds. The combined test uses 50 seconds of the AMI Meeting Corpus, ES2004a, under CC BY 4.0. Its exact attribution, reference cues and known limits are in `public/windows-speakers-test.json` and `public/windows-speakers-test-LICENSE.txt`.
 
 The excerpt was selected as a known functional check, not an unbiased model benchmark. Direct local inference recognizes four identities, but this does not guarantee perfect word attribution in a live call.
+
+Windows live transcription processes completed phrases to avoid repeatedly decoding drafts on the CPU. Text appears after a pause or at the 12-second phrase boundary, plus inference time. Older CPUs may still be too slow for this model. The report records inference and queue timing; test speaker labeling off and on separately when diagnosing processing load.
 
 ## Report and privacy
 

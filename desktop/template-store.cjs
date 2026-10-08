@@ -91,6 +91,8 @@ function createTemplateLibraryStore(file, defaults) {
     });
     if (!ids.has(value.activeId)) throw new Error('Invalid active template.');
     const result = { version: 2, activeId: value.activeId, templates };
+    if (Number.isSafeInteger(value.presetVersion) && value.presetVersion >= 0)
+      result.presetVersion = value.presetVersion;
     if (Buffer.byteLength(JSON.stringify(result)) > 10_000_000)
       throw new Error('Template library is too large.');
     return result;

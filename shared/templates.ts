@@ -6,6 +6,7 @@ export interface SavedTemplate {
 }
 export interface TemplateLibrary {
   version: 2;
+  presetVersion?: number;
   activeId: string;
   templates: SavedTemplate[];
 }

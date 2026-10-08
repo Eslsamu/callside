@@ -39,6 +39,28 @@ release while retaining its saved settings and models.
 
 The model infers the current need from the available transcript and instructions. Automatic timing and answer quality are model-dependent. The desktop shortcuts work outside the Callside window when the operating system allows registration; the browser shortcut requires focus.
 
+## Use cases
+
+| Situation                           | Template                            | Example help                                                                                         |
+| ----------------------------------- | ----------------------------------- | ---------------------------------------------------------------------------------------------------- |
+| Practising a language during a call | Language buddy                      | A natural way to phrase your next thought, a useful correction, or help understanding an expression. |
+| Sales conversations                 | Sales                               | Respond to an objection or ask a follow-up using your product notes.                                 |
+| Interview practice                  | Interview                           | Rehearse concise spoken answers grounded in your actual experience.                                  |
+| Teaching a workshop                 | Workshop                            | Find an explanation, example, or exercise hint from pasted course material.                          |
+| Customer support                    | General, with your own instructions | Suggest a troubleshooting step using pasted documentation and the current discussion.                |
+| Team meetings                       | General, with your own instructions | Summarize an open question or suggest a next step from the conversation.                             |
+
+### Language practice
+
+In the current source version, choose **Settings → Templates & task → Saved templates → Language buddy**.
+This template is not yet included in the 0.7.0 installer. Existing source-version template libraries receive it on next startup without changing the selected template.
+
+1. Add your preferences to **Reference material**, for example: “I am learning German at B1 level. My native language is English. Focus on everyday conversation and word order.”
+2. In **Settings → Models → Language**, select the language you are practising (or Automatic). In **Settings → Audio**, keep your microphone enabled; include call audio when practising with someone else.
+3. Save the template in **Templates & task**. During a call, press **Help now** for a short contextual hint, or enable **Automatic hints** for selective corrections and help when you express difficulty. The template checks speech from both sides, but corrects only your own language.
+
+All task and automatic-hint instructions are visible and editable. The template helps with wording and comprehension; it does not assess pronunciation or accent from audio. Transcription and speaker-label errors can affect hints, and automatic hints are not guaranteed after every mistake. Suggestions use your configured answer provider and its normal usage limits or charges.
+
 ## An alternative to Cluely, Final Round AI, and LockedIn AI
 
 If you are looking for a **free, open-source Cluely alternative**, Callside provides live transcription and contextual assistance with source code you can modify and an API key you control. It also covers the live conversation-assistance use case of tools such as **Final Round AI** and **LockedIn AI**, while allowing tasks for teaching, customer support, and sales.

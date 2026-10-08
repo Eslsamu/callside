@@ -22,6 +22,23 @@ const check = z.object({
   message: text.optional(),
   errors: z.array(text).max(100).optional(),
   firstTextMs: number.optional(),
+  localInference: z
+    .array(
+      z.object({
+        turnId: z.string().max(100),
+        source: z.enum(['mic', 'system']),
+        empty: z.boolean(),
+        final: z.boolean(),
+        audioMs: number,
+        processingMs: number,
+        requestMs: number,
+        queueMs: number,
+        speechToTextMs: number,
+        firstTextMs: number,
+      }),
+    )
+    .max(100)
+    .optional(),
   durationMs: number.optional(),
   matches: z.boolean().optional(),
   peak: number.optional(),

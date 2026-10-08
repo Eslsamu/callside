@@ -36,6 +36,9 @@ type Result = {
   attributionMessage: string;
   attributionDelayMs?: number;
   judgments: Partial<Record<Judgment, boolean>>;
+  localInference?: Array<
+    import('../shared/local-test').LocalMeasurement & { source: Source; empty: boolean }
+  >;
 };
 type Shortcut = { state: State; received: number; outsideApp: boolean; message: string };
 type Answer = {
@@ -167,6 +170,9 @@ export default function WindowsCheck() {
   const [notes, setNotes] = useState(''),
     [headphones, setHeadphones] = useState('speakers');
   const [speakerEnabled, setSpeakerEnabled] = useState(true);
+  const [microphones, setMicrophones] = useState<MediaDeviceInfo[]>([]);
+  const [micDeviceId, setMicDeviceId] = useState('');
+  const [deviceMessage, setDeviceMessage] = useState('');
   const [level, setLevel] = useState<Record<Source, number>>({ mic: 0, system: 0 });
   const [cue, setCue] = useState('');
   const [armed, setArmed] = useState(false);
@@ -395,6 +401,16 @@ export default function WindowsCheck() {
   useEffect(() => {
     if (chatgpt?.connected && !chatgpt.pending) void authAction('models');
   }, [chatgpt?.connected, chatgpt?.pending]);
+  useEffect(() => {
+    if (!chatgpt?.error) return;
+    const message = safeMessage(chatgpt.error);
+    setAnswer((old) => ({
+      ...old,
+      state: 'fail',
+      message,
+      errors: old.errors.includes(message) ? old.errors : [...old.errors, message].slice(-10),
+    }));
+  }, [chatgpt?.error]);
   async function authAction(action: 'connect' | 'cancel' | 'models' | 'welcome' | 'disconnect') {
     setAuthBusy(true);
     setAuthMessage('');
@@ -438,6 +454,25 @@ export default function WindowsCheck() {
       setReady(true);
     } catch (error) {
       setSetup({ phase: 'error', message: safeMessage(error) });
+    } finally {
+      setBusy(false);
+    }
+  }
+  async function loadMicrophones() {
+    setBusy(true);
+    setDeviceMessage('');
+    try {
+      // Enumeration still permits selection when the OS default input cannot be opened.
+      const devices = await navigator.mediaDevices.enumerateDevices();
+      const inputs = devices.filter((device) => device.kind === 'audioinput');
+      setMicrophones(inputs);
+      setDeviceMessage(
+        inputs.length
+          ? 'Choose your microphone below. If names are hidden, run the microphone test to grant access, then refresh this list.'
+          : 'No microphone is visible. Connect it and enable Windows Settings → Privacy & security → Microphone → Microphone access and Let desktop apps access your microphone, then restart Callside.',
+      );
+    } catch (error) {
+      setDeviceMessage(safeMessage(error));
     } finally {
       setBusy(false);
     }
@@ -495,17 +530,17 @@ export default function WindowsCheck() {
       commit(check, {
         ...current,
         durationMs: Math.round(performance.now() - started.current),
-        state: stopped
-          ? 'stopped'
-          : current.errors.length
-            ? 'fail'
+        state: current.errors.length
+          ? 'fail'
+          : stopped
+            ? 'stopped'
             : current.text
               ? 'review'
               : 'fail',
-        message: stopped
-          ? 'Test stopped. Retry or continue with the other checks.'
-          : current.errors.length
-            ? 'A problem occurred. Review the text and error details below.'
+        message: current.errors.length
+          ? 'A problem occurred. Review the text and error details below.'
+          : stopped
+            ? 'Test stopped. Retry or continue with the other checks.'
             : current.text
               ? 'Review the transcript below.'
               : 'No transcript received. Retry or continue; the failure is saved.',
@@ -546,9 +581,20 @@ export default function WindowsCheck() {
           captureMic: check !== 'system',
           captureSystem: check !== 'mic',
           captureMode: 'realtime',
+          micDeviceId,
         },
         token,
         {
+          onLocalMeasurement(source, measurement, empty) {
+            const current = report.current[check];
+            commit(check, {
+              ...current,
+              localInference: [
+                ...(current.localInference ?? []),
+                { ...measurement, source, empty },
+              ].slice(-100),
+            });
+          },
           onTranscript(entry) {
             reconcile.current.accept(entry);
             const current = report.current[check];
@@ -1144,6 +1190,32 @@ export default function WindowsCheck() {
             <option value="headphones">Headphones</option>
           </select>
         </label>
+        <label>
+          Microphone input
+          <select
+            value={micDeviceId}
+            disabled={busy}
+            onChange={(event) => setMicDeviceId(event.target.value)}
+          >
+            <option value="">System default</option>
+            {microphones
+              .filter((device) => device.deviceId && device.deviceId !== 'default')
+              .map((device, index) => (
+                <option key={device.deviceId} value={device.deviceId}>
+                  {device.label || `Microphone ${index + 1}`}
+                </option>
+              ))}
+          </select>
+        </label>
+        <button className="secondary-button" disabled={busy} onClick={() => void loadMicrophones()}>
+          Refresh microphone list
+        </button>
+        {deviceMessage && <p role="status">{deviceMessage}</p>}
+        <p className="field-help">
+          If the default input fails, select your headset or built-in microphone here. This
+          selection applies to all microphone checks in this session. Check Windows microphone
+          access for desktop apps if no input is available.
+        </p>
         <p className="field-help">
           Use your normal speakers at a comfortable volume. Pause unrelated audio. Each recording
           stops automatically and can also be stopped manually.

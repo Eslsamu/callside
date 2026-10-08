@@ -49,6 +49,8 @@ export function createLocalSink(
     },
     {
       onTurn: (turn) => {
+        if (turn.measurement)
+          callbacks.onLocalMeasurement?.(source, turn.measurement, !turn.text.trim());
         callbacks.onTranscript({
           id: `${prefix}-${turn.id}`,
           source,
@@ -65,6 +67,9 @@ export function createLocalSink(
       onStatus: (status) => callbacks.onStatus(source, `Local · ${status}`),
       onError: fail,
     },
+    undefined,
+    // CPU-only Windows builds should not decode the same phrase repeatedly as it grows.
+    { drafts: window.callsideDesktop?.platform !== 'win32', measureEmptyResults: true },
   );
   return {
     beginTurn: () => undefined,
