@@ -14,7 +14,7 @@ This development preview targets Windows 11 on Intel/AMD x64 PCs with AVX2, FMA 
 
 ## One tester session
 
-Run `Callside-Windows-Test-x64.exe`. The installer works per user, creates a shortcut, and opens the guided test. No developer tools, API key or separate model download is needed. A current eligible ChatGPT subscription is needed only for the answer test. Allow approximately 10–15 minutes after initial model loading; a short call with a second person can be included in the same session.
+Run `Callside-Windows-Test-x64.exe`. The installer works per user, creates a shortcut, and opens the guided test. No developer tools, API key or separate model download is needed. For the optional answer test, use your own eligible ChatGPT subscription or a provided API test key. No purchase is required. Allow approximately 10–15 minutes after initial model loading; a short call with a second person can be included in the same session.
 
 1. Prepare the bundled Whisper model and enable test capture. Refresh the microphone list and select your headset or built-in input if the Windows default does not work.
 2. Read the English microphone sentence; play the computer-audio sentence. Review each transcript for substantial errors.
@@ -30,7 +30,7 @@ The preview uses separate `Callside Windows Test` application data and does not 
 
 ## Included runtimes and fixtures
 
-- Whisper large-v3-turbo-q5_0, with a checksum-verified 574 MB model. The Windows executable uses CPU inference, is statically linked, and does not require the tester to install Visual C++ runtime libraries. It runs without a console window.
+- Multilingual Whisper Small Q5_1, with a checksum-verified 190 MB model. This Windows preview trades some recognition accuracy for lower CPU latency. The Windows executable uses CPU inference, is statically linked, and does not require the tester to install Visual C++ runtime libraries. It runs without a console window.
 - Experimental LS-EEND AMI speaker labeling in an isolated worker using single-threaded ONNX Runtime WASM. The pinned model is included. No Python, GPU, model account, or paid service is required. Four anonymous remote voices are supported. Labels are estimates; overlapping turns may remain ambiguous. Microphone identity comes from the input source rather than voice recognition.
 - The individual system test is a short English sentence about euros and pounds. The combined test uses 50 seconds of the AMI Meeting Corpus, ES2004a, under CC BY 4.0. Its exact attribution, reference cues and known limits are in `public/windows-speakers-test.json` and `public/windows-speakers-test-LICENSE.txt`.
 
@@ -40,7 +40,7 @@ Windows live transcription processes completed phrases to avoid repeatedly decod
 
 ## Report and privacy
 
-The report contains test transcript text, optional notes, check outcomes, approximate timing, app/build versions, CPU/RAM and shortcut/secure-storage capability results. It excludes audio, credentials, account identifiers, device IDs, usernames, saved templates and local paths. Nothing is uploaded automatically. The answer test sends the displayed test transcript to the tester's ChatGPT account, counts toward plan limits, and never switches to API billing.
+The report contains test transcript text, optional notes, check outcomes, approximate timing, app/build versions, CPU/RAM and shortcut/secure-storage capability results. It excludes audio, credentials, account identifiers, device IDs, usernames, saved templates and local paths. Nothing is uploaded automatically. The optional answer test sends test transcript text through the explicitly selected connection. Subscription mode uses plan limits. Provided API test key mode uses GPT-6 Luna with reasoning off and at most 256 output tokens; it does not verify subscription sign-in. Keys are session-only and excluded from reports. There is no automatic billing fallback.
 
 A disposable encrypted sentinel checks storage across processes. It is separate from real credentials. The settings test temporarily saves a nonce through the normal template store, keeps a local backup, and restores the previous template afterward. That backup is not exported.
 
@@ -50,7 +50,7 @@ Unsigned private previews can trigger Windows security warnings. If the installe
 
 The current Mac build machine needs Xcode tools, CMake, MinGW-w64, Node and Git. These are developer-only dependencies. A native Windows build can use CMake/MSVC with static linking.
 
-The pinned Whisper model must exist at `.local/models/ggml-large-v3-turbo-q5_0.bin`. The build downloads/verifies the small portable speaker model using a pinned revision and hashes. A personal instruction file at `.local/windows-test-instructions.txt` is included; otherwise the English instructions are copied.
+The build downloads and verifies the pinned Whisper model at `.local/models/ggml-small-q5_1.bin`. The build downloads/verifies the small portable speaker model using a pinned revision and hashes. A personal instruction file at `.local/windows-test-instructions.txt` is included; otherwise the English instructions are copied.
 
 ```sh
 npm run build

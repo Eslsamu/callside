@@ -47,8 +47,8 @@ module.exports = {
       ],
     },
     {
-      from: '.local/models/ggml-large-v3-turbo-q5_0.bin',
-      to: 'models/ggml-large-v3-turbo-q5_0.bin',
+      from: '.local/models/ggml-small-q5_1.bin',
+      to: 'models/ggml-small-q5_1.bin',
     },
   ],
   asarUnpack: [

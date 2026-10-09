@@ -59,6 +59,7 @@ const check = z.object({
   received: number.optional(),
   outsideApp: z.boolean().optional(),
   connected: z.boolean().optional(),
+  billing: z.enum(['api', 'chatgpt']).optional(),
   model: z.string().max(100).optional(),
   models: z.array(z.string().max(100)).max(100).optional(),
   requestCount: number.optional(),

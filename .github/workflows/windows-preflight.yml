@@ -2,8 +2,6 @@ name: Windows preflight checks
 
 on:
   workflow_dispatch:
-  push:
-    branches: [codex/windows-preflight]
 
 permissions:
   contents: read
@@ -24,8 +22,6 @@ jobs:
       - run: npm ci
       - name: Check application logic before packaging
         run: npm test
-      - name: Download and verify the pinned Whisper model
-        run: node --import tsx --input-type=module -e "import { ensureWhisperModel } from './server/whisper-model.ts'; await ensureWhisperModel();"
       - name: Build native runtimes and unpacked app only
         run: npm run desktop:windows-preview -- --check-only
       - name: Check desktop test flow without microphones or paid APIs

@@ -14,8 +14,8 @@ const binary = windows
   ? `${root}/resources/app.asar.unpacked/desktop/bin/windows/whisper-server.exe`
   : process.env.WHISPER_SERVER_BIN;
 const model = windows
-  ? `${root}/resources/models/ggml-large-v3-turbo-q5_0.bin`
-  : process.env.WHISPER_MODEL_PATH || '.local/models/ggml-large-v3-turbo-q5_0.bin';
+  ? `${root}/resources/models/ggml-small-q5_1.bin`
+  : process.env.WHISPER_MODEL_PATH || '.local/models/ggml-small-q5_1.bin';
 if (binary) await access(binary);
 await access(model);
 const wav = await readFile('public/windows-system-test.wav');

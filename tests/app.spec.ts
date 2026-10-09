@@ -1443,6 +1443,7 @@ async function windowsAPI(page: Page) {
     accounts: [{ id: 'PRIVATE-ACCOUNT-ID', label: 'private@example.test', connected: false }],
     models: [] as Array<{ id: string; name: string }>,
   };
+  const keyRequests: any[] = [];
   const answerRequests: any[] = [],
     speechRequests: any[] = [],
     speakerRequests: any[] = [],
@@ -1458,6 +1459,10 @@ async function windowsAPI(page: Page) {
       return route.fulfill({
         json: { token: 'PRIVATE-CSRF-TOKEN', hasApiKey: false, models: [], chatgpt },
       });
+    if (path === '/api/key') {
+      keyRequests.push(body);
+      return route.fulfill({ json: { ok: true } });
+    }
     if (path === '/api/local/prepare') return route.fulfill({ json: { ready: true } });
     if (path === '/api/local/status' || path === '/api/local-speakers/status')
       return route.fulfill({ json: { phase: 'ready', message: 'Included fixture model ready' } });
@@ -1558,6 +1563,7 @@ async function windowsAPI(page: Page) {
   });
   return {
     answerRequests,
+    keyRequests,
     speechRequests,
     speakerRequests,
     unexpected,
@@ -2006,4 +2012,42 @@ test('results render Markdown and keep incoming text visible without page scroll
   await expect(result.getByRole('heading', { name: 'Next step' })).toBeInViewport();
   await expect(result.locator('table')).toBeVisible();
   await page.screenshot({ path: '.local/results-markdown-short.png' });
+});
+
+test('Windows API answer uses an explicit session key without exporting it or claiming subscription sign-in', async ({
+  page,
+}) => {
+  test.setTimeout(35000);
+  await windowsDesktop(page);
+  const api = await windowsAPI(page);
+  await prepareWindows(page);
+  await page.getByRole('button', { name: 'Test microphone', exact: true }).click();
+  await page
+    .getByRole('button', { name: 'Text is correct', exact: true })
+    .first()
+    .click({ timeout: 18000 });
+  await page.getByRole('combobox', { name: 'Answer connection', exact: true }).selectOption('api');
+  await page.getByLabel('Test API key', { exact: true }).fill('sk-PRIVATE-TEST-KEY');
+  await page.getByRole('button', { name: 'Use test key for this session', exact: true }).click();
+  await expect(
+    page.getByText('Test key set for this app session. Re-enter it after restarting.', {
+      exact: true,
+    }),
+  ).toBeVisible();
+  await page.getByRole('button', { name: 'Request one test answer', exact: true }).click();
+  await expect.poll(() => api.answerRequests.length).toBe(1);
+  expect(api.answerRequests[0].settings).toMatchObject({
+    answerBilling: 'api',
+    model: 'gpt-6-luna',
+    reasoningEffort: 'none',
+    maxOutputTokens: 256,
+  });
+  expect(api.keyRequests).toEqual([{ apiKey: 'sk-PRIVATE-TEST-KEY', remember: false }]);
+  const report = await windowsReport(page);
+  expect(report.checks.chatgpt.billing).toBe('api');
+  expect(report.checks.chatgpt.connected).toBe(false);
+  await page.getByRole('button', { name: 'Remove test key', exact: true }).click();
+  await expect.poll(() => api.keyRequests.length).toBe(2);
+  expect(api.keyRequests[1]).toEqual({ apiKey: '', remember: false });
+  expect(api.unexpected).toEqual([]);
 });

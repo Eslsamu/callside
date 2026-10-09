@@ -1,7 +1,6 @@
 import { access, copyFile } from 'node:fs/promises';
 import { spawnSync } from 'node:child_process';
-import { createHash } from 'node:crypto';
-import { createReadStream } from 'node:fs';
+import { ensureWindowsModel } from './windows-model.mjs';
 const args = process.argv.slice(2);
 const checkOnly = args.includes('--check-only');
 if (!checkOnly && !args.includes('--test-package'))
@@ -11,11 +10,7 @@ if (!checkOnly && !args.includes('--test-package'))
 await access('.local/windows-test-instructions.txt').catch(() =>
   copyFile('docs/windows-quick-check.txt', '.local/windows-test-instructions.txt'),
 );
-const hash = createHash('sha256');
-for await (const chunk of createReadStream('.local/models/ggml-large-v3-turbo-q5_0.bin'))
-  hash.update(chunk);
-if (hash.digest('hex') !== '394221709cd5ad1f40c46e6031ca61bce88931e6e088c188294c6d5a55ffa7e2')
-  throw Error('The bundled Whisper model does not match the pinned checksum.');
+await ensureWindowsModel();
 const env = { ...process.env, CALLSIDE_PREVIEW_ID: new Date().toISOString().replace(/[:.]/g, '-') };
 const run = (cmd, args) => {
   const result = spawnSync(cmd, args, {

@@ -170,7 +170,7 @@ async function boot() {
     localModelDirectory: path.join(app.getPath('userData'), 'models'),
     bundledWhisperModel:
       windowsPreview && app.isPackaged
-        ? path.join(process.resourcesPath, 'models', 'ggml-large-v3-turbo-q5_0.bin')
+        ? path.join(process.resourcesPath, 'models', 'ggml-small-q5_1.bin')
         : undefined,
 
     localSpeakerBinary: app.isPackaged

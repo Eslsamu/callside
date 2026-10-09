@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Use multilingual Whisper Small Q5_1 in the Windows CPU test preview, with a pinned checksum and real inference build check. Add explicit session-only API-key answer testing with provider-labeled reports, without changing the regular macOS model.
+
 - Windows guided QA now uses English test speech, offers a 30-minute sustained-call check, and uses the captured call for follow-up answer checks.
 
 - Add a real CPU-only Whisper fixture check to the Windows build workflow, exercising the packaged executable and serialized simultaneous requests, with retained timing and qualitative transcript evidence.
