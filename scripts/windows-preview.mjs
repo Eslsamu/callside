@@ -7,10 +7,10 @@ if (!checkOnly && !args.includes('--test-package'))
   throw Error(
     'Use --test-package only when a shareable Windows preview has been requested. This does not create a version release.',
   );
+await ensureWindowsModel();
 await access('.local/windows-test-instructions.txt').catch(() =>
   copyFile('docs/windows-quick-check.txt', '.local/windows-test-instructions.txt'),
 );
-await ensureWindowsModel();
 const env = { ...process.env, CALLSIDE_PREVIEW_ID: new Date().toISOString().replace(/[:.]/g, '-') };
 const run = (cmd, args) => {
   const result = spawnSync(cmd, args, {
