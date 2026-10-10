@@ -1,8 +1,8 @@
 import assert from 'node:assert/strict';
-import { access, mkdir, readFile, writeFile } from 'node:fs/promises';
-import { cpus, totalmem } from 'node:os';
+import { access, mkdir, readFile, writeFile, mkdtemp, rm } from 'node:fs/promises';
+import { cpus, totalmem, tmpdir } from 'node:os';
 import { resolve } from 'node:path';
-import { startLocalWhisper } from '../server/local-whisper.js';
+import { WHISPER_MODEL_NAME } from '../server/whisper-model.js';
 import { startServer } from '../server/index.js';
 import { StreamingResampler, floatToPcm16, encodeWav } from '../src/audio/dsp.js';
 
@@ -42,25 +42,38 @@ const report: Record<string, unknown> = {
 };
 const requests: Array<Record<string, unknown>> = [];
 report.requests = requests;
-let engine: Awaited<ReturnType<typeof startLocalWhisper>> | undefined;
+const modelDirectory = await mkdtemp(resolve(tmpdir(), 'callside-upgrade-'));
+const legacyModel = resolve(modelDirectory, WHISPER_MODEL_NAME);
+await writeFile(legacyModel, 'Old cached model sentinel: must never be loaded or overwritten');
 let server: Awaited<ReturnType<typeof startServer>> | undefined;
 let failure: unknown;
 try {
   const start = performance.now();
-  engine = await startLocalWhisper(model, binary, { cpuOnly: true });
-  report.model = engine.model;
-  report.loadMs = Math.round(performance.now() - start);
   server = await startServer({
     port: 0,
     apiOnly: true,
     apiKey: '',
-    localEngine: engine,
+    localModelDirectory: modelDirectory,
+    localWhisperBinary: binary,
+    bundledWhisperModel: resolve(model),
     providerFactory: () => {
       throw Error('Cloud access forbidden in native inference check');
     },
   });
   const bootstrap = await fetch(`${server.url}/api/bootstrap`).then((response) => response.json());
   const headers = { 'Content-Type': 'application/json', 'X-Callside-Token': bootstrap.token };
+  const prepared = await fetch(`${server.url}/api/local/prepare`, { method: 'POST', headers });
+  const preparation = await prepared.json();
+  assert.equal(prepared.status, 200, JSON.stringify(preparation));
+  assert.equal(preparation.model, 'small-q5_1');
+  report.model = preparation.model;
+  report.loadMs = Math.round(performance.now() - start);
+  assert.equal(
+    await readFile(legacyModel, 'utf8'),
+    'Old cached model sentinel: must never be loaded or overwritten',
+  );
+  report.cachedOldModelPreserved = true;
+  report.productionPreparationPath = true;
   const check = async (name: string) => {
     const start = performance.now();
     const response = await fetch(`${server!.url}/api/local/transcribe`, {
@@ -96,7 +109,7 @@ try {
   report.error = error instanceof Error ? error.message : String(error);
 } finally {
   await server?.close();
-  if (!server) await engine?.close();
+  await rm(modelDirectory, { recursive: true, force: true });
   await mkdir('.local/windows-qa', { recursive: true });
   await writeFile(
     '.local/windows-qa/native-inference.json',

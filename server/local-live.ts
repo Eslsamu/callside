@@ -1,6 +1,4 @@
-import { access, copyFile, mkdir, rename, rm } from 'node:fs/promises';
-import { join } from 'node:path';
-import { WHISPER_MODEL_NAME } from './whisper-model.js';
+import { access } from 'node:fs/promises';
 import type { Express } from 'express';
 import { z } from 'zod';
 import type { LocalEngine } from '../shared/local-test.js';
@@ -21,7 +19,13 @@ export function attachLocalLive(
     message: 'Prepare local audio. Existing model files are reused.',
   };
   app.get('/api/local/status', async (_req, res) => {
-    const downloaded = await hasWhisperModel(directory);
+    const downloaded =
+      bundledModel && !process.env.WHISPER_MODEL_PATH
+        ? await access(bundledModel).then(
+            () => true,
+            () => false,
+          )
+        : await hasWhisperModel(directory);
     res.json({ ...progress, downloaded });
   });
   let engine: (LocalEngine & { close?(): Promise<void> }) | undefined = supplied;
@@ -32,35 +36,25 @@ export function attachLocalLive(
   const prepare = () => {
     if (closed) return Promise.reject(new Error('Server closed'));
     if (engine) {
-      progress = { phase: 'ready', percent: 100, message: 'Whisper ready' };
+      progress = { phase: 'ready', percent: 100, message: `Whisper ready (${engine.model})` };
       return Promise.resolve(engine);
     }
     return (loading ??= (async () => {
-      if (bundledModel && directory && !process.env.WHISPER_MODEL_PATH) {
-        const target = join(directory, WHISPER_MODEL_NAME);
-        try {
-          await access(target);
-        } catch {
-          progress = { phase: 'loading', message: 'Preparing the included Whisper model' };
-          await mkdir(directory, { recursive: true });
-          try {
-            await copyFile(bundledModel, target + '.part');
-            await rename(target + '.part', target);
-          } catch (error) {
-            await rm(target + '.part', { force: true });
-            throw error;
-          }
-        }
-      }
-      const model = await ensureWhisperModel(directory, (value) => {
-        progress = value;
-      });
+      // Use the packaged model directly. An older cached model must not override it,
+      // and copying a different model under the default filename corrupts its identity.
+      const model =
+        bundledModel && !process.env.WHISPER_MODEL_PATH
+          ? bundledModel
+          : await ensureWhisperModel(directory, (value) => {
+              progress = value;
+            });
+      await access(model);
       engine = await startLocalWhisper(model, binary);
       if (closed) {
         await engine.close?.();
         throw new Error('Server closed');
       }
-      progress = { phase: 'ready', percent: 100, message: 'Whisper ready' };
+      progress = { phase: 'ready', percent: 100, message: `Whisper ready (${engine.model})` };
       return engine;
     })().finally(() => {
       loading = undefined;

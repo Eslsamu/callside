@@ -11,7 +11,7 @@ vi.mock('openai', () => ({
     type: options.type,
   }),
 }));
-import { OpenAIProvider } from '../server/provider.js';
+import { OpenAIProvider, publicError } from '../server/provider.js';
 import { decodeWav } from '../server/validation.js';
 
 function wav() {
@@ -331,4 +331,14 @@ it('omits a custom output cap and reports actual token and cache usage', async (
       reasoningTokens: 100,
     },
   });
+});
+
+it('reports safe connection codes and service status without exposing raw error details', () => {
+  expect(publicError({ status: 503, message: 'sk-private' })).toContain('HTTP 503');
+  expect(
+    publicError(new Error('secret URL', { cause: { code: 'ECONNRESET', apiKey: 'private' } })),
+  ).toContain('ECONNRESET');
+  expect(publicError(new Error('sk-private', { cause: { code: 'unknown-secret' } }))).not.toContain(
+    'secret',
+  );
 });

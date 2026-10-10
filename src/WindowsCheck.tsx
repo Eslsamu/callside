@@ -68,9 +68,17 @@ type Checkpoint = {
   chatgptWasConnected: boolean;
   previousTemplate: Settings | null;
 };
+type PreviousRun = {
+  buildId: string;
+  savedAt: string;
+  checks: SavedState['checks'];
+  notes: string;
+};
 type SavedState = {
   schemaVersion: 2;
   savedAt: string;
+  buildId?: string;
+  previousRuns?: PreviousRun[];
   checks: Record<AudioCheck, Result> & { shortcut: Shortcut; chatgpt: Answer; restart: Restart };
   preferences: { output: string; model: string };
   notes: string;
@@ -140,6 +148,7 @@ export default function WindowsCheck() {
   const [environment, setEnvironment] = useState<Record<string, unknown>>({});
   const [hydrated, setHydrated] = useState(false);
   const [restored, setRestored] = useState(false);
+  const [previousRuns, setPreviousRuns] = useState<PreviousRun[]>([]);
   const [storageMessage, setStorageMessage] = useState('');
   const [exportMessage, setExportMessage] = useState('');
   const [exportBusy, setExportBusy] = useState(false);
@@ -230,6 +239,8 @@ export default function WindowsCheck() {
     return {
       schemaVersion: 2,
       savedAt: new Date().toISOString(),
+      buildId: String(environment.buildId || 'development'),
+      previousRuns,
       checks: { ...report.current, shortcut, chatgpt: answer, restart },
       preferences: { output: headphones, model },
       notes,
@@ -286,7 +297,26 @@ export default function WindowsCheck() {
         setEnvironment(diagnostics);
         const state = loaded as unknown as SavedState | null;
         if (state?.schemaVersion === 2 && state.checks && state.preferences) {
-          setRestored(true);
+          const history = state.previousRuns || [];
+          if (state.buildId !== String(diagnostics.buildId || 'development')) {
+            setPreviousRuns(
+              [
+                ...history,
+                {
+                  buildId: state.buildId || 'unknown older build',
+                  savedAt: state.savedAt,
+                  checks: state.checks,
+                  notes: state.notes,
+                },
+              ].slice(-2),
+            );
+            // Keep the restart recovery checkpoint, but never show old passes as this build's results.
+            state.checks = {} as SavedState['checks'];
+            state.notes = '';
+          } else {
+            setPreviousRuns(history);
+            setRestored(true);
+          }
           const restored = Object.fromEntries(
             (['mic', 'system', 'conversation', 'call'] as const).map((key) => [
               key,
@@ -405,7 +435,7 @@ export default function WindowsCheck() {
       350,
     );
     return () => clearTimeout(id);
-  }, [hydrated, results, shortcut, answer, restart, notes, headphones, model]);
+  }, [hydrated, results, shortcut, answer, restart, notes, headphones, model, previousRuns]);
   useEffect(() => {
     if (!chatgpt?.pending || !token) return;
     let stopped = false;
@@ -768,6 +798,13 @@ export default function WindowsCheck() {
           : 'Complete the remaining review questions.',
     });
   }
+  const answerSource = results.call.entries.length
+    ? 'Real call'
+    : results.conversation.entries.length
+      ? 'Recorded conversation'
+      : results.system.entries.length
+        ? 'Computer-audio sample (currency question)'
+        : 'Microphone test';
   const answerTranscript = results.call.entries.length
     ? results.call.entries
     : results.conversation.entries.length
@@ -797,7 +834,6 @@ export default function WindowsCheck() {
         answerBilling === 'api'
           ? 'Requesting one answer using the test API key…'
           : 'Requesting one answer through your ChatGPT subscription…',
-      errors: [],
       firstTextMs: undefined,
       durationMs: undefined,
       requestCount: old.requestCount + 1,
@@ -854,7 +890,7 @@ export default function WindowsCheck() {
         state: 'fail',
         text,
         message,
-        errors: [message],
+        errors: [...old.errors, `${new Date().toISOString()}: ${message}`].slice(-30),
         durationMs: Math.round(performance.now() - before),
       }));
     } finally {
@@ -955,6 +991,7 @@ export default function WindowsCheck() {
       output: headphones,
       checks: { ...report.current, shortcut, chatgpt: answer, restart },
       notes,
+      previousRuns,
       scope:
         'Guided real microphone and loopback capture, simultaneous sources, local Whisper and local speaker labeling, optional real call application, optional ChatGPT subscription or explicit API suggestion (billing field identifies which), global shortcut and persistence across app restart. Skipped, interrupted and not-run steps are not passes. This is a hardware test, not a claim of general Windows support.',
       privacy:
@@ -1179,6 +1216,12 @@ export default function WindowsCheck() {
         </p>
       </header>
       {!hydrated && <p role="status">Loading test progress…</p>}
+      {previousRuns.length > 0 && (
+        <p role="status">
+          Results from {previousRuns.length} earlier build(s) are archived in the report. This build
+          starts with fresh checks; saved settings are retained.
+        </p>
+      )}
       {restored && (
         <p role="status">
           Previous test progress restored.{' '}
@@ -1403,7 +1446,7 @@ export default function WindowsCheck() {
             onChange={(event) => {
               setAnswerBilling(event.target.value as Settings['answerBilling']);
               setArmed(false);
-              setAnswer(emptyAnswer());
+              setAnswer((old) => ({ ...emptyAnswer(), errors: old.errors }));
             }}
           >
             <option value="chatgpt">ChatGPT subscription</option>
@@ -1549,8 +1592,28 @@ export default function WindowsCheck() {
               Uses the lowest supported reasoning setting. The request includes only a transcript
               recorded in this test. The selected connection is used with no automatic fallback.
             </p>
-            {!answerTranscript.length && (
+            <p>
+              Step 5 reuses captured text; it does not record new speech. To record a new sample,
+              run the microphone check in Step 2, or the conversation/call check above, then return
+              here.
+            </p>
+            {answerTranscript.length ? (
+              <details open>
+                <summary>Transcript used: {answerSource}</summary>
+                <p>
+                  {answerTranscript.map((entry) => `${entry.speaker}: ${entry.text}`).join('\n')}
+                </p>
+              </details>
+            ) : (
               <p>Record at least one audio test before requesting an answer.</p>
+            )}
+            {answer.errors.length > 0 && (
+              <details>
+                <summary>Previous answer errors ({answer.errors.length})</summary>
+                {answer.errors.map((error, index) => (
+                  <p key={index}>{error}</p>
+                ))}
+              </details>
             )}
             <div className="check-actions">
               <button

@@ -16,7 +16,12 @@ export async function prepareLocal(token: string, update?: (progress: SetupProgr
       });
       const result = await response.json();
       if (!response.ok) throw new Error(result.error || 'Local model could not start.');
-      update?.({ phase: 'ready', percent: 100, message: 'Whisper ready' });
+      update?.({
+        phase: 'ready',
+        percent: 100,
+        message:
+          typeof result.model === 'string' ? `Whisper ready (${result.model})` : 'Whisper ready',
+      });
     },
     update,
   );

@@ -1448,6 +1448,7 @@ async function windowsAPI(page: Page) {
     speechRequests: any[] = [],
     speakerRequests: any[] = [],
     unexpected: string[] = [];
+  let answerFailure = false;
   let connectFailure = false,
     audioFailure = false,
     receivedSamples = 0,
@@ -1549,6 +1550,13 @@ async function windowsAPI(page: Page) {
     }
     if (path === '/api/answer') {
       answerRequests.push(body);
+      if (answerFailure) {
+        answerFailure = false;
+        return route.fulfill({
+          contentType: 'text/event-stream',
+          body: 'data: {"type":"error","message":"Temporary connection failed"}\n\n',
+        });
+      }
       return route.fulfill({
         contentType: 'text/event-stream',
         body: 'data: {"type":"delta","text":"Ich fasse die wichtigsten Punkte kurz zusammen."}\n\ndata: {"type":"done"}\n\n',
@@ -1567,6 +1575,9 @@ async function windowsAPI(page: Page) {
     speechRequests,
     speakerRequests,
     unexpected,
+    failAnswerOnce() {
+      answerFailure = true;
+    },
     failConnect() {
       connectFailure = true;
     },
@@ -1790,6 +1801,7 @@ test('Windows failed audio and sign-in remain reportable, skipped steps are not 
   const native = await windowsDesktop(page, {
     schemaVersion: 2,
     savedAt: new Date().toISOString(),
+    buildId: 'browser-fixture',
     checks: { conversation: { state: 'running', message: 'Recording' } },
     preferences: { output: 'headphones', model: '' },
     notes: 'Keep this note.',
@@ -2034,8 +2046,12 @@ test('Windows API answer uses an explicit session key without exporting it or cl
       exact: true,
     }),
   ).toBeVisible();
+  await expect(page.getByText('Transcript used: Microphone test', { exact: true })).toBeVisible();
+  api.failAnswerOnce();
   await page.getByRole('button', { name: 'Request one test answer', exact: true }).click();
-  await expect.poll(() => api.answerRequests.length).toBe(1);
+  await expect(page.getByText('Previous answer errors (1)', { exact: true })).toBeVisible();
+  await page.getByRole('button', { name: 'Request one test answer', exact: true }).click();
+  await expect.poll(() => api.answerRequests.length).toBe(2);
   expect(api.answerRequests[0].settings).toMatchObject({
     answerBilling: 'api',
     model: 'gpt-6-luna',
@@ -2044,10 +2060,41 @@ test('Windows API answer uses an explicit session key without exporting it or cl
   });
   expect(api.keyRequests).toEqual([{ apiKey: 'sk-PRIVATE-TEST-KEY', remember: false }]);
   const report = await windowsReport(page);
+  expect(report.checks.chatgpt.errors).toHaveLength(1);
+  expect(report.checks.chatgpt.errors[0]).toContain('Temporary connection failed');
   expect(report.checks.chatgpt.billing).toBe('api');
   expect(report.checks.chatgpt.connected).toBe(false);
   await page.getByRole('button', { name: 'Remove test key', exact: true }).click();
   await expect.poll(() => api.keyRequests.length).toBe(2);
   expect(api.keyRequests[1]).toEqual({ apiKey: '', remember: false });
   expect(api.unexpected).toEqual([]);
+});
+
+test('Windows upgrade archives previous results instead of treating them as current passes', async ({
+  page,
+}) => {
+  await windowsDesktop(page, {
+    schemaVersion: 2,
+    buildId: 'old-build',
+    savedAt: '2026-10-07T00:00:00Z',
+    checks: { mic: { state: 'pass', text: 'Old transcript', entries: [] } },
+    preferences: { output: 'headphones', model: '' },
+    notes: 'Earlier observation',
+  });
+  await windowsAPI(page);
+  await prepareWindows(page);
+  await expect(
+    page.getByText('Results from 1 earlier build(s) are archived', { exact: false }),
+  ).toBeVisible();
+  const report = await windowsReport(page);
+  expect(report.checks.mic.state).toBe('not-run');
+  expect(report.previousRuns[0]).toMatchObject({
+    buildId: 'old-build',
+    notes: 'Earlier observation',
+    checks: { mic: { state: 'pass', text: 'Old transcript' } },
+  });
+  await page.reload();
+  await expect(page.getByRole('button', { name: 'Prepare test', exact: true })).toBeVisible();
+  const restored = await windowsReport(page);
+  expect(restored.previousRuns).toEqual(report.previousRuns);
 });
