@@ -29,3 +29,6 @@ try {
 } finally {
   if (Test-Path $fixture) { Remove-Item -LiteralPath $fixture -Recurse -Force }
 }
+# The child must fail; do not let the Actions PowerShell wrapper interpret that
+# expected native exit code as failure of the test harness itself.
+exit 0
