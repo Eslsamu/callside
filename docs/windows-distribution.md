@@ -2,7 +2,8 @@
 
 Windows QA artifacts are unsigned development previews. They are not public
 release installers. The signed release path is prepared, but signing is not yet
-activated and the reported Google Safe Browsing block is not yet cleared.
+activated. The latest test installer downloaded successfully in the maintainer's
+Chrome on macOS; Windows browser acceptance still needs verification.
 
 ## Code signing policy
 
@@ -129,8 +130,11 @@ Whisper inference and a Defender scan with zero detections. A separate
 verified the package checksums, absence of both removed components, and all 734
 app files matching between the installer and portable ZIP.
 
-Chrome acceptance of this new build and Windows installation behavior remain
-unverified. Keep the Google review open until the reported block is resolved.
+The maintainer subsequently confirmed that the new installer artifact downloaded
+successfully in Chrome on macOS. This resolves the block in that observed test;
+it does not prove which component or reputation change caused the earlier block.
+Windows browser acceptance and installation behavior remain unverified. The
+review of the old download has no confirmed outcome.
 
 Do not disable security protections, repackage files to conceal their contents,
 or instruct public users to bypass malware warnings as the installation flow.
