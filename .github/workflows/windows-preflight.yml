@@ -7,13 +7,18 @@ on:
         description: 'Scan an existing Windows test artifact instead of rebuilding (Actions run ID)'
         required: false
         type: string
+      release_checks:
+        description: 'Validate public-release safeguards without building or signing an installer'
+        required: false
+        type: boolean
+        default: false
 
 permissions:
   contents: read
 
 jobs:
   build:
-    if: ${{ inputs.artifact_run_id == '' }}
+    if: ${{ inputs.artifact_run_id == '' && !inputs.release_checks }}
     runs-on: windows-2022
     timeout-minutes: 45
     env:
@@ -44,7 +49,7 @@ jobs:
           retention-days: 30
 
   security-scan:
-    if: ${{ inputs.artifact_run_id != '' }}
+    if: ${{ inputs.artifact_run_id != '' && !inputs.release_checks }}
     runs-on: windows-2022
     timeout-minutes: 30
     permissions:
@@ -70,3 +75,19 @@ jobs:
           path: .local/windows-security/
           if-no-files-found: error
           retention-days: 30
+
+  release-checks:
+    if: ${{ inputs.release_checks }}
+    runs-on: windows-2022
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npx vitest run tests/windows-release.test.ts tests/desktop-updates.test.ts
+      - name: Verify Windows signature checks reject an unsigned package
+        shell: pwsh
+        run: ./scripts/check-windows-release.ps1

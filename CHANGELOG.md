@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Prepare a separate signed Windows release path that refuses unsigned public builds, verifies publisher and timestamped signatures in the shipped files, scans the final packages and retains checksums and build provenance. Signing activation and public-browser acceptance remain pending.
+- Enable bundled local transcription and speaker models in regular packaged Windows builds as well as QA previews.
+
 - Scan Windows test packages with current Microsoft Defender signatures before distribution and retain scan evidence. Existing test artifacts can also be scanned without rebuilding; browser download reputation remains a separate check.
 
 - Fix Windows upgrades reusing a cached large Whisper model instead of the bundled small model. Verify the production model-preparation path with an old cache present and show the loaded model in setup diagnostics.

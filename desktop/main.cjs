@@ -169,7 +169,7 @@ async function boot() {
       : undefined,
     localModelDirectory: path.join(app.getPath('userData'), 'models'),
     bundledWhisperModel:
-      windowsPreview && app.isPackaged
+      process.platform === 'win32' && app.isPackaged
         ? path.join(process.resourcesPath, 'models', 'ggml-small-q5_1.bin')
         : undefined,
 
@@ -177,7 +177,7 @@ async function boot() {
       ? path.join(process.resourcesPath, 'app.asar.unpacked', 'desktop/bin/callside-diarizer')
       : path.join(__dirname, 'bin/callside-diarizer'),
     bundledSpeakerModel:
-      windowsPreview && app.isPackaged
+      process.platform === 'win32' && app.isPackaged
         ? path.join(process.resourcesPath, 'models', 'speakers', 'ls_eend_ami_step.onnx')
         : undefined,
     port: 0,

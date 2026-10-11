@@ -1,7 +1,8 @@
 param(
   [Parameter(Mandatory = $true)][string]$PackageDirectory,
   [string]$ReportDirectory = '.local/windows-security',
-  [switch]$ExtractPortable
+  [switch]$ExtractPortable,
+  [string[]]$PackageNames = @('Callside-Windows-Test-x64.exe', 'Callside-Windows-Test-x64.zip')
 )
 $ErrorActionPreference = 'Stop'
 $PSNativeCommandUseErrorActionPreference = $false
@@ -32,7 +33,9 @@ try {
     Sort-Object FullName -Descending | Select-Object -First 1 -ExpandProperty FullName
   if (-not $scanner) { $scanner = "$env:ProgramFiles\Windows Defender\MpCmdRun.exe" }
   if (-not (Test-Path $scanner)) { throw 'Defender scanner executable is unavailable.' }
-  foreach ($name in @('Callside-Windows-Test-x64.exe', 'Callside-Windows-Test-x64.zip')) {
+  if ($PackageNames.Count -eq 0) { throw 'No packages specified for scanning.' }
+  foreach ($name in $PackageNames) {
+    if ([System.IO.Path]::GetFileName($name) -ne $name) { throw 'Package names must not contain directories.' }
     $file = Join-Path $root $name
     $hash = (Get-FileHash $file -Algorithm SHA256).Hash.ToLower()
     $report.files += @{ name = $name; sha256 = $hash; bytes = (Get-Item $file).Length }
@@ -48,7 +51,9 @@ try {
     $report.build = Get-Content (Join-Path $root 'BUILD.json') -Raw | ConvertFrom-Json
   }
   if ($ExtractPortable) {
-    Expand-Archive (Join-Path $root 'Callside-Windows-Test-x64.zip') (Join-Path $root 'expanded')
+    foreach ($name in $PackageNames | Where-Object { $_.EndsWith('.zip') }) {
+      Expand-Archive -LiteralPath (Join-Path $root $name) -DestinationPath (Join-Path $root ([System.IO.Path]::GetFileNameWithoutExtension($name) + '-expanded'))
+    }
   }
   # Custom diagnostic scans ignore exclusions, scan archives, and retain detections
   # in command output without removing evidence. Real-time protection stays enabled.

@@ -269,9 +269,9 @@ npm version patch --no-git-tag-version  # 0.3.2 -> 0.3.3; use minor for a featur
 npm run desktop:pack
 ```
 
-This updates both package files and creates a new numbered build folder. Rebuilding the same version replaces that version's packaged app. See [release notes](CHANGELOG.md) for the changes in each version.
+This updates both package files and creates a new numbered build folder. Do not overwrite a distributed version; corrections require a new version. See [release notes](CHANGELOG.md) for the changes in each version.
 
-Build distributable desktop packages on the target OS. Public macOS and Windows distribution also requires your own signing/notarization setup. No signing credentials or prebuilt signed installers are included.
+Build distributable desktop packages on the target OS. Public macOS and Windows distribution also requires a signing/notarization setup. No signing credentials are included. See the Windows [code signing policy and distribution setup](docs/windows-distribution.md); signing activation and public download verification are still pending.
 
 ### Optional local transcription experiment
 
