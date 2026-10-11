@@ -4,11 +4,29 @@ import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { DEFAULT_SETTINGS } from '../shared/defaults';
-import { createLibrary } from '../src/template';
+import { createLibrary, upgradePresets } from '../src/template';
 const { createTemplateLibraryStore } = createRequire(import.meta.url)(
   '../desktop/template-store.cjs',
 );
 describe('named template library', () => {
+  it('adds Language buddy once without changing existing settings or restoring deleted presets', () => {
+    const library = createLibrary();
+    delete library.presetVersion;
+    library.templates = library.templates.filter((t) => t.id !== 'languageBuddy');
+    library.activeId = 'sales';
+    const existing = structuredClone(library.templates);
+    library.templates[0].name = 'Language buddy';
+    existing[0].name = 'Language buddy';
+    const upgraded = upgradePresets(library);
+    expect(upgraded.activeId).toBe('sales');
+    expect(upgraded.templates.slice(0, -1)).toEqual(existing);
+    expect(upgraded.templates.at(-1)?.name).toBe('Language buddy (2)');
+    expect(upgraded.templates.at(-1)?.settings.autoTriggerSource).toBe('either');
+    expect(upgraded.templates.at(-1)?.settings.context).toBe('');
+    upgraded.templates = upgraded.templates.filter((t) => t.id !== 'languageBuddy');
+    expect(upgradePresets(upgraded)).toBe(upgraded);
+    expect(upgraded.templates).toHaveLength(existing.length);
+  });
   it('preserves legacy context only in Saved setup, with separate preset settings', () => {
     const legacy = { ...DEFAULT_SETTINGS, context: 'Private sales notes' };
     const library = createLibrary(legacy);
@@ -31,6 +49,7 @@ describe('named template library', () => {
       library.templates[1].settings.context = 'Customer notes';
       (library.templates[1].settings as any).apiKey = 'secret';
       await store.save(library);
+      expect((await store.load()).presetVersion).toBe(1);
       expect((await store.load()).templates[1].settings.context).toBe('Customer notes');
       const before = await readFile(path, 'utf8');
       expect(before).not.toContain('secret');

@@ -16,7 +16,12 @@ export async function prepareLocal(token: string, update?: (progress: SetupProgr
       });
       const result = await response.json();
       if (!response.ok) throw new Error(result.error || 'Local model could not start.');
-      update?.({ phase: 'ready', percent: 100, message: 'Whisper ready' });
+      update?.({
+        phase: 'ready',
+        percent: 100,
+        message:
+          typeof result.model === 'string' ? `Whisper ready (${result.model})` : 'Whisper ready',
+      });
     },
     update,
   );
@@ -49,6 +54,8 @@ export function createLocalSink(
     },
     {
       onTurn: (turn) => {
+        if (turn.measurement)
+          callbacks.onLocalMeasurement?.(source, turn.measurement, !turn.text.trim());
         callbacks.onTranscript({
           id: `${prefix}-${turn.id}`,
           source,
@@ -65,6 +72,9 @@ export function createLocalSink(
       onStatus: (status) => callbacks.onStatus(source, `Local · ${status}`),
       onError: fail,
     },
+    undefined,
+    // CPU-only Windows builds should not decode the same phrase repeatedly as it grows.
+    { drafts: window.callsideDesktop?.platform !== 'win32', measureEmptyResults: true },
   );
   return {
     beginTurn: () => undefined,

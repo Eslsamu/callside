@@ -1443,10 +1443,12 @@ async function windowsAPI(page: Page) {
     accounts: [{ id: 'PRIVATE-ACCOUNT-ID', label: 'private@example.test', connected: false }],
     models: [] as Array<{ id: string; name: string }>,
   };
+  const keyRequests: any[] = [];
   const answerRequests: any[] = [],
     speechRequests: any[] = [],
     speakerRequests: any[] = [],
     unexpected: string[] = [];
+  let answerFailure = false;
   let connectFailure = false,
     audioFailure = false,
     receivedSamples = 0,
@@ -1458,6 +1460,10 @@ async function windowsAPI(page: Page) {
       return route.fulfill({
         json: { token: 'PRIVATE-CSRF-TOKEN', hasApiKey: false, models: [], chatgpt },
       });
+    if (path === '/api/key') {
+      keyRequests.push(body);
+      return route.fulfill({ json: { ok: true } });
+    }
     if (path === '/api/local/prepare') return route.fulfill({ json: { ready: true } });
     if (path === '/api/local/status' || path === '/api/local-speakers/status')
       return route.fulfill({ json: { phase: 'ready', message: 'Included fixture model ready' } });
@@ -1544,6 +1550,13 @@ async function windowsAPI(page: Page) {
     }
     if (path === '/api/answer') {
       answerRequests.push(body);
+      if (answerFailure) {
+        answerFailure = false;
+        return route.fulfill({
+          contentType: 'text/event-stream',
+          body: 'data: {"type":"error","message":"Temporary connection failed"}\n\n',
+        });
+      }
       return route.fulfill({
         contentType: 'text/event-stream',
         body: 'data: {"type":"delta","text":"Ich fasse die wichtigsten Punkte kurz zusammen."}\n\ndata: {"type":"done"}\n\n',
@@ -1558,9 +1571,13 @@ async function windowsAPI(page: Page) {
   });
   return {
     answerRequests,
+    keyRequests,
     speechRequests,
     speakerRequests,
     unexpected,
+    failAnswerOnce() {
+      answerFailure = true;
+    },
     failConnect() {
       connectFailure = true;
     },
@@ -1594,6 +1611,58 @@ async function prepareWindows(page: Page) {
     .check();
 }
 
+test('Windows microphone selection reaches capture and inference errors during stop survive in the report', async ({
+  page,
+}) => {
+  test.setTimeout(25000);
+  await windowsDesktop(page);
+  await windowsAPI(page);
+  let release!: () => void;
+  const blocked = new Promise<void>((done) => {
+    release = done;
+  });
+  let requested = false;
+  await page.route('**/api/local/transcribe', async (route) => {
+    requested = true;
+    await blocked;
+    await route.fulfill({
+      status: 502,
+      json: { error: 'Local Whisper exceeded 30 seconds for one phrase.' },
+    });
+  });
+  await prepareWindows(page);
+  await page.evaluate(() => {
+    Object.defineProperty(navigator.mediaDevices, 'enumerateDevices', {
+      configurable: true,
+      value: async () => [{ kind: 'audioinput', deviceId: 'PRIVATE-MIC-ID', label: 'USB headset' }],
+    });
+    const acquire = navigator.mediaDevices.getUserMedia.bind(navigator.mediaDevices);
+    Object.defineProperty(navigator.mediaDevices, 'getUserMedia', {
+      configurable: true,
+      value: (constraints: MediaStreamConstraints) => {
+        (window as any).__micConstraints = constraints;
+        return acquire(constraints);
+      },
+    });
+  });
+  await page.getByRole('button', { name: 'Refresh microphone list' }).click();
+  await page
+    .getByRole('combobox', { name: 'Microphone input', exact: true })
+    .selectOption('PRIVATE-MIC-ID');
+  await page.getByRole('button', { name: 'Test microphone', exact: true }).click();
+  await expect.poll(() => requested).toBe(true);
+  expect(await page.evaluate(() => (window as any).__micConstraints.audio.deviceId.exact)).toBe(
+    'PRIVATE-MIC-ID',
+  );
+  await page.getByRole('button', { name: 'Stop test', exact: true }).click();
+  release();
+  await expect(page.getByRole('button', { name: 'Test microphone', exact: true })).toBeEnabled();
+  const report = await windowsReport(page);
+  expect(report.checks.mic.state).toBe('fail');
+  expect(report.checks.mic.errors).toContain('Local Whisper exceeded 30 seconds for one phrase.');
+  expect(JSON.stringify(report)).not.toContain('PRIVATE-MIC-ID');
+});
+
 test('Windows quick check captures each source and exports diagnostics without credentials', async ({
   page,
 }) => {
@@ -1617,6 +1686,7 @@ test('Windows quick check captures each source and exports diagnostics without c
   const report = await windowsReport(page);
   expect(report.checks.mic.state).toBe('pass');
   expect(report.checks.system.state).toBe('pass');
+  expect(report.checks.system.localInference.length).toBeGreaterThan(0);
   expect(report.checks.conversation.state).toBe('not-run');
   expect(report.environment.ramGB).toBe(32);
   expect(api.speechRequests.length).toBeGreaterThan(2);
@@ -1731,6 +1801,7 @@ test('Windows failed audio and sign-in remain reportable, skipped steps are not 
   const native = await windowsDesktop(page, {
     schemaVersion: 2,
     savedAt: new Date().toISOString(),
+    buildId: 'browser-fixture',
     checks: { conversation: { state: 'running', message: 'Recording' } },
     preferences: { output: 'headphones', model: '' },
     notes: 'Keep this note.',
@@ -1953,4 +2024,77 @@ test('results render Markdown and keep incoming text visible without page scroll
   await expect(result.getByRole('heading', { name: 'Next step' })).toBeInViewport();
   await expect(result.locator('table')).toBeVisible();
   await page.screenshot({ path: '.local/results-markdown-short.png' });
+});
+
+test('Windows API answer uses an explicit session key without exporting it or claiming subscription sign-in', async ({
+  page,
+}) => {
+  test.setTimeout(35000);
+  await windowsDesktop(page);
+  const api = await windowsAPI(page);
+  await prepareWindows(page);
+  await page.getByRole('button', { name: 'Test microphone', exact: true }).click();
+  await page
+    .getByRole('button', { name: 'Text is correct', exact: true })
+    .first()
+    .click({ timeout: 18000 });
+  await page.getByRole('combobox', { name: 'Answer connection', exact: true }).selectOption('api');
+  await page.getByLabel('Test API key', { exact: true }).fill('sk-PRIVATE-TEST-KEY');
+  await page.getByRole('button', { name: 'Use test key for this session', exact: true }).click();
+  await expect(
+    page.getByText('Test key set for this app session. Re-enter it after restarting.', {
+      exact: true,
+    }),
+  ).toBeVisible();
+  await expect(page.getByText('Transcript used: Microphone test', { exact: true })).toBeVisible();
+  api.failAnswerOnce();
+  await page.getByRole('button', { name: 'Request one test answer', exact: true }).click();
+  await expect(page.getByText('Previous answer errors (1)', { exact: true })).toBeVisible();
+  await page.getByRole('button', { name: 'Request one test answer', exact: true }).click();
+  await expect.poll(() => api.answerRequests.length).toBe(2);
+  expect(api.answerRequests[0].settings).toMatchObject({
+    answerBilling: 'api',
+    model: 'gpt-6-luna',
+    reasoningEffort: 'none',
+    maxOutputTokens: 256,
+  });
+  expect(api.keyRequests).toEqual([{ apiKey: 'sk-PRIVATE-TEST-KEY', remember: false }]);
+  const report = await windowsReport(page);
+  expect(report.checks.chatgpt.errors).toHaveLength(1);
+  expect(report.checks.chatgpt.errors[0]).toContain('Temporary connection failed');
+  expect(report.checks.chatgpt.billing).toBe('api');
+  expect(report.checks.chatgpt.connected).toBe(false);
+  await page.getByRole('button', { name: 'Remove test key', exact: true }).click();
+  await expect.poll(() => api.keyRequests.length).toBe(2);
+  expect(api.keyRequests[1]).toEqual({ apiKey: '', remember: false });
+  expect(api.unexpected).toEqual([]);
+});
+
+test('Windows upgrade archives previous results instead of treating them as current passes', async ({
+  page,
+}) => {
+  await windowsDesktop(page, {
+    schemaVersion: 2,
+    buildId: 'old-build',
+    savedAt: '2026-10-07T00:00:00Z',
+    checks: { mic: { state: 'pass', text: 'Old transcript', entries: [] } },
+    preferences: { output: 'headphones', model: '' },
+    notes: 'Earlier observation',
+  });
+  await windowsAPI(page);
+  await prepareWindows(page);
+  await expect(
+    page.getByText('Results from 1 earlier build(s) are archived', { exact: false }),
+  ).toBeVisible();
+  const report = await windowsReport(page);
+  expect(report.checks.mic.state).toBe('not-run');
+  expect(report.previousRuns[0]).toMatchObject({
+    buildId: 'old-build',
+    notes: 'Earlier observation',
+    checks: { mic: { state: 'pass', text: 'Old transcript' } },
+  });
+  await page.reload();
+  await expect(page.getByRole('button', { name: 'Prepare test', exact: true })).toBeVisible();
+  const restored = await windowsReport(page);
+  expect(restored.previousRuns).toEqual(report.previousRuns);
 });

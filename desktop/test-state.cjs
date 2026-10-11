@@ -22,6 +22,23 @@ const check = z.object({
   message: text.optional(),
   errors: z.array(text).max(100).optional(),
   firstTextMs: number.optional(),
+  localInference: z
+    .array(
+      z.object({
+        turnId: z.string().max(100),
+        source: z.enum(['mic', 'system']),
+        empty: z.boolean(),
+        final: z.boolean(),
+        audioMs: number,
+        processingMs: number,
+        requestMs: number,
+        queueMs: number,
+        speechToTextMs: number,
+        firstTextMs: number,
+      }),
+    )
+    .max(100)
+    .optional(),
   durationMs: number.optional(),
   matches: z.boolean().optional(),
   peak: number.optional(),
@@ -42,6 +59,7 @@ const check = z.object({
   received: number.optional(),
   outsideApp: z.boolean().optional(),
   connected: z.boolean().optional(),
+  billing: z.enum(['api', 'chatgpt']).optional(),
   model: z.string().max(100).optional(),
   models: z.array(z.string().max(100)).max(100).optional(),
   requestCount: number.optional(),
@@ -68,6 +86,24 @@ function createTestStateStore(file, defaults) {
   const schema = z.object({
     schemaVersion: z.literal(2),
     savedAt: z.string().max(40),
+    buildId: z.string().max(100).optional(),
+    previousRuns: z
+      .array(
+        z.object({
+          buildId: z.string().max(100),
+          savedAt: z.string().max(40),
+          notes: z.string().max(2000),
+          checks: z.object(
+            Object.fromEntries(
+              ['mic', 'system', 'conversation', 'shortcut', 'chatgpt', 'restart', 'call'].map(
+                (key) => [key, check.optional()],
+              ),
+            ),
+          ),
+        }),
+      )
+      .max(2)
+      .optional(),
     checks: z.object(
       Object.fromEntries(
         ['mic', 'system', 'conversation', 'shortcut', 'chatgpt', 'restart', 'call'].map((key) => [
@@ -95,7 +131,7 @@ function createTestStateStore(file, defaults) {
       .optional(),
   });
   function sanitize(value) {
-    if (Buffer.byteLength(JSON.stringify(value), 'utf8') > 250000)
+    if (Buffer.byteLength(JSON.stringify(value), 'utf8') > 1000000)
       throw Error('The test checkpoint is too large. Download the report before retrying.');
     const parsed = schema.safeParse(value);
     if (!parsed.success) throw Error('The saved test checkpoint is invalid.');
@@ -139,7 +175,7 @@ const checks = z.object(
   ),
 );
 function sanitizeTestReport(value) {
-  if (Buffer.byteLength(JSON.stringify(value), 'utf8') > 250000)
+  if (Buffer.byteLength(JSON.stringify(value), 'utf8') > 1000000)
     throw Error('The test report is too large.');
   return z
     .object({
@@ -167,6 +203,17 @@ function sanitizeTestReport(value) {
       setup: z.object({ phase: z.string().max(30), message: text }),
       output: z.string().max(30),
       checks,
+      previousRuns: z
+        .array(
+          z.object({
+            buildId: z.string().max(100),
+            savedAt: z.string().max(40),
+            checks,
+            notes: z.string().max(2000),
+          }),
+        )
+        .max(2)
+        .optional(),
       notes: z.string().max(2000),
       scope: text,
       privacy: text,

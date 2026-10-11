@@ -67,6 +67,35 @@ async function signedIn(expires = 3600) {
   return test;
 }
 describe('ChatGPT OAuth connection', () => {
+  it('reports initial sign-in failures accurately without exposing the OAuth body', async () => {
+    const test = setup();
+    await test.auth.init();
+    await test.auth.connect();
+    test.upstream.mockResolvedValueOnce(
+      Response.json(
+        { error: 'invalid_grant', error_description: 'secret-code private@example.test' },
+        { status: 400 },
+      ),
+    );
+    await fetch(callback(test.url()));
+    expect(test.auth.status().error).toContain(
+      'sign-in could not be completed (HTTP 400, invalid_grant)',
+    );
+    expect(test.auth.status().error).not.toMatch(/renewed|secret-code|private@example/);
+  });
+  it('retains credentials on temporary refresh failure but clears revoked tokens while retaining registration', async () => {
+    const test = await signedIn(1);
+    test.upstream.mockResolvedValueOnce(Response.json({ error: 'unavailable' }, { status: 503 }));
+    await expect(test.auth.accessToken()).rejects.toThrow('temporarily unavailable (HTTP 503)');
+    expect(test.saved()).toContain('secret-refresh');
+    test.upstream.mockResolvedValueOnce(
+      Response.json({ error: { code: 'refresh_token_reused' } }, { status: 400 }),
+    );
+    await expect(test.auth.accessToken()).rejects.toThrow('Reconnect in Settings');
+    expect(test.saved()).not.toContain('secret-refresh');
+    expect(test.saved()).toContain('issued-client');
+    expect(test.auth.status().connected).toBe(false);
+  });
   it('uses PKCE, rejects wrong state before exchange, verifies identity and keeps tokens out of status', async () => {
     const test = setup();
     await test.auth.init();

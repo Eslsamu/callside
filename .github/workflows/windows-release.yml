@@ -1,0 +1,94 @@
+name: Windows signed release candidate
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Approved release version (must match package.json)'
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: windows-signed-release
+  cancel-in-progress: false
+
+jobs:
+  build:
+    # Never expose signing credentials to pull requests or arbitrary refs.
+    if: github.repository == 'Eslsamu/callside' && github.ref == 'refs/heads/main'
+    runs-on: windows-2022
+    environment: windows-release
+    timeout-minutes: 45
+    env:
+      OPENAI_API_KEY: ''
+      CSC_IDENTITY_AUTO_DISCOVERY: 'false'
+      WINDOWS_SIGNING_PROVIDER: ${{ vars.WINDOWS_SIGNING_PROVIDER }}
+      WINDOWS_PUBLISHER_NAME: ${{ vars.WINDOWS_PUBLISHER_NAME }}
+      AZURE_SIGNING_ENDPOINT: ${{ vars.AZURE_SIGNING_ENDPOINT }}
+      AZURE_SIGNING_ACCOUNT: ${{ vars.AZURE_SIGNING_ACCOUNT }}
+      AZURE_SIGNING_PROFILE: ${{ vars.AZURE_SIGNING_PROFILE }}
+      AZURE_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
+      AZURE_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
+      AZURE_CLIENT_SECRET: ${{ secrets.AZURE_CLIENT_SECRET }}
+      WIN_CSC_LINK: ${{ secrets.WIN_CSC_LINK }}
+      WIN_CSC_KEY_PASSWORD: ${{ secrets.WIN_CSC_KEY_PASSWORD }}
+      RELEASE_VERSION: ${{ inputs.version }}
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: 22
+          cache: npm
+      - name: Require signing configuration before downloading build dependencies
+        run: node -e "require('./scripts/windows-release.cjs')"
+      - run: npm ci
+      - run: npm test
+      - name: Build and verify the signed installer and portable archive
+        run: node scripts/windows-release.mjs --version $env:RELEASE_VERSION
+      - name: Scan the final signed files
+        shell: pwsh
+        run: |
+          ./scripts/windows-security-scan.ps1 -PackageDirectory .local/windows-release -PackageNames @("Callside-$env:RELEASE_VERSION-windows-x64.exe", "Callside-$env:RELEASE_VERSION-windows-x64.zip")
+      - name: Write checksums and public build provenance
+        shell: pwsh
+        run: |
+          $root = '.local/windows-release'
+          $files = @("Callside-$env:RELEASE_VERSION-windows-x64.exe", "Callside-$env:RELEASE_VERSION-windows-x64.zip")
+          $files | ForEach-Object { "$((Get-FileHash (Join-Path $root $_) -Algorithm SHA256).Hash.ToLower())  $_" } | Set-Content (Join-Path $root 'SHA256SUMS.txt')
+          @{
+            version = $env:RELEASE_VERSION
+            commit = $env:GITHUB_SHA
+            repository = $env:GITHUB_REPOSITORY
+            run = "https://github.com/$env:GITHUB_REPOSITORY/actions/runs/$env:GITHUB_RUN_ID"
+            signed = $true
+            publisher = $env:WINDOWS_PUBLISHER_NAME
+            purpose = 'Signed candidate; public download acceptance still requires verification'
+          } | ConvertTo-Json | Set-Content (Join-Path $root 'BUILD.json')
+      - name: Retain security evidence, including failed checks
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: Windows-release-security-${{ github.run_id }}
+          path: |
+            .local/windows-security/
+            .local/windows-release/SIGNATURES.json
+          if-no-files-found: warn
+          retention-days: 30
+      - name: Retain verified candidate for review (does not publish a release)
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: Callside-signed-windows-${{ github.run_id }}
+          path: |
+            .local/windows-release/Callside-${{ inputs.version }}-windows-x64.exe
+            .local/windows-release/Callside-${{ inputs.version }}-windows-x64.zip
+            .local/windows-release/*.blockmap
+            .local/windows-release/latest.yml
+            .local/windows-release/SHA256SUMS.txt
+            .local/windows-release/BUILD.json
+            .local/windows-release/SIGNATURES.json
+          if-no-files-found: error
+          compression-level: 0
+          retention-days: 30

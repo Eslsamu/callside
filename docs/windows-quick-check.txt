@@ -1,13 +1,24 @@
 CALLSIDE WINDOWS GUIDED TEST
 
-Private preview for Windows 11, Intel/AMD x64 with AVX2, FMA and F16C.
+Development preview for Windows 11, Intel/AMD x64 with AVX2, FMA and F16C.
 Allow about 10–15 minutes after the first model load.
 
-Run Callside-Windows-Test-x64.exe to install for your Windows user.
-The app opens automatically; the desktop shortcut opens it again later.
-If using the optional ZIP: extract everything before opening Callside.exe.
+Choose one download from the Windows test build workflow:
+- Portable: extract the downloaded artifact ZIP, then extract the enclosed
+  Callside-Windows-Test-x64.zip completely. Open Callside.exe from that folder.
+  Keep the whole folder. The app and both local models are included.
+  This checks app functionality, but not installation, shortcuts or uninstall.
+- Installer: extract the downloaded artifact ZIP, then run
+  Callside-Windows-Test-x64.exe to install for your Windows user.
+  Follow the installation wizard; choose "Only for me" if asked.
+  When it finishes, open the Callside Windows Test desktop shortcut.
+
+Use the portable download for runtime QA while the installer warning is under
+review. Tell us which package you tested. Browser acceptance on your Windows
+machine still needs checking; stop and report any security warning.
 No developer tools, API key, or separate model download is needed.
-Use your own ChatGPT subscription for the optional answer test.
+For the optional answer test, use your own ChatGPT subscription or the provided
+API test key. Do not buy a subscription or credits.
 
 Follow the numbered steps in the app:
 1. Prepare the model and consent to the audio test.
@@ -16,7 +27,9 @@ Follow the numbered steps in the app:
    the displayed reply. Review speaker labels and missing/duplicated speech.
 4. Include a short test call in your usual app, if someone is available.
 5. Press F8 or Ctrl+Shift+Space while another window is active.
-   Sign in to ChatGPT yourself and request one test suggestion.
+   Select your answer connection. Sign in to ChatGPT yourself, or choose
+   Provided API test key and enter the supplied key for this session.
+   Request one test suggestion. API mode does not test ChatGPT sign-in.
 6. Save progress and restart using the app's button.
 7. Download test report: choose where to save the JSON and send it back.
 
@@ -26,5 +39,5 @@ settings. Do not disable antivirus. Results remain saved when the app closes.
 
 The report contains test text, results and basic system specifications, but
 no audio, usernames, device IDs, keys, accounts or saved templates. Nothing is
-uploaded automatically. Only the answer request sends test text to ChatGPT.
+uploaded automatically. Only the answer request sends test text to OpenAI. Test keys are not in reports.
 Use non-private test sentences. Speaker labels are experimental estimates.

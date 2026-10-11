@@ -46,7 +46,36 @@ export function createLibrary(legacy?: Settings): TemplateLibrary {
     } as Settings,
   }));
   if (legacy) templates.push({ id: 'migrated', name: 'Saved setup', settings: { ...legacy } });
-  return { version: 2, activeId: legacy ? 'migrated' : 'universal', templates };
+  return { version: 2, presetVersion: 1, activeId: legacy ? 'migrated' : 'universal', templates };
+}
+
+// Add newly shipped presets once; never restore one the user subsequently deletes.
+export function upgradePresets(library: TemplateLibrary): TemplateLibrary {
+  if ((library.presetVersion ?? 0) >= 1) return library;
+  const templates = [...library.templates];
+  if (!templates.some((t) => t.id === 'languageBuddy') && templates.length < 100) {
+    const preset = TASK_PRESETS.languageBuddy;
+    let name: string = preset.name;
+    for (
+      let suffix = 2;
+      templates.some((t) => t.name.toLowerCase() === name.toLowerCase());
+      suffix++
+    )
+      name = `${preset.name} (${suffix})`;
+    const base = templates.find((t) => t.id === library.activeId)!.settings;
+    templates.push({
+      id: 'languageBuddy',
+      name,
+      settings: {
+        ...base,
+        context: '',
+        systemPrompt: preset.prompt,
+        autoPrompt: preset.autoPrompt,
+        autoTriggerSource: preset.autoTriggerSource,
+      },
+    });
+  }
+  return { ...library, presetVersion: 1, templates };
 }
 export async function loadTemplates(): Promise<{
   library: TemplateLibrary;
@@ -67,6 +96,7 @@ export async function loadTemplates(): Promise<{
         throw new Error('Invalid templates');
       const library: TemplateLibrary = {
         version: 2,
+        presetVersion: stored.presetVersion,
         activeId: stored.activeId,
         templates: stored.templates.map((t: SavedTemplate) => ({
           id: t.id,
@@ -74,10 +104,20 @@ export async function loadTemplates(): Promise<{
           settings: safeSettings(t.settings, DEFAULT_SETTINGS),
         })),
       };
+      const upgraded = upgradePresets(library);
+      let error = '';
+      if (upgraded !== library) {
+        try {
+          await saveTemplates(upgraded);
+        } catch {
+          error =
+            'Could not save the new built-in template. Your existing templates are unchanged; use Save template to retry.';
+        }
+      }
       return {
-        library,
+        library: upgraded,
         settings: library.templates.find((t) => t.id === library.activeId)!.settings,
-        error: '',
+        error,
       };
     }
     const raw = window.callsideDesktop

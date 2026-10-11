@@ -66,7 +66,7 @@ it('strips accidental account credentials, audio and device identifiers from per
 it('rejects corrupted or oversized checkpoints without replacing the last useful result', async () => {
   const { file, store } = await fixture();
   await store.save(checkpoint());
-  expect(() => store.save({ ...checkpoint(), notes: 'x'.repeat(300000) })).toThrow('too large');
+  expect(() => store.save({ ...checkpoint(), notes: 'x'.repeat(1100000) })).toThrow('too large');
   expect(() => store.save({ ...checkpoint(), schemaVersion: 999 })).toThrow('invalid');
   expect(await store.load()).toEqual(checkpoint());
   await writeFile(file, '{broken');
@@ -74,4 +74,37 @@ it('rejects corrupted or oversized checkpoints without replacing the last useful
     'could not be restored',
   );
   expect(await readFile(file, 'utf8')).toBe('{broken');
+});
+
+it('preserves build history in native checkpoints and reports while stripping private fields', async () => {
+  const { store } = await fixture();
+  const previousRuns = [
+    {
+      buildId: 'old-build',
+      savedAt: '2026-10-07T00:00:00Z',
+      notes: 'Old results',
+      checks: {
+        chatgpt: { state: 'fail', errors: ['Temporary connection failure'], apiKey: 'private-key' },
+      },
+    },
+  ];
+  await store.save({ ...checkpoint(), buildId: 'new-build', previousRuns });
+  const saved = await store.load();
+  const { sanitizeTestReport } = createRequire(import.meta.url)('../desktop/test-state.cjs');
+  const report = sanitizeTestReport({
+    schemaVersion: 2,
+    test: 'windows-comprehensive-preview',
+    exportedAt: new Date().toISOString(),
+    environment: { buildId: 'new-build' },
+    setup: { phase: 'idle', message: '' },
+    output: 'headphones',
+    checks: {},
+    notes: '',
+    scope: 'test',
+    privacy: 'test',
+    previousRuns: saved.previousRuns,
+  });
+  expect(report.previousRuns[0].buildId).toBe('old-build');
+  expect(report.previousRuns[0].checks.chatgpt.errors).toEqual(['Temporary connection failure']);
+  expect(JSON.stringify(report)).not.toContain('private-key');
 });

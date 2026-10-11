@@ -49,6 +49,7 @@ try {
   const checkpoint = {
     schemaVersion: 2,
     savedAt: new Date().toISOString(),
+    buildId: first.buildId || 'development',
     checks: {
       mic: { state: 'pass', text: 'Synthetic test', message: 'Confirmed' },
       restart: { state: 'running', message: 'Awaiting app restart.' },

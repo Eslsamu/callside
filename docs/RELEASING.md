@@ -37,6 +37,11 @@ A commit is not a release. Never replace the files of an already distributed ver
 
 See [macOS installation and signing](macos-installer.md) for platform requirements.
 
+For Windows, follow [public distribution and code signing](windows-distribution.md).
+The signed candidate workflow requires an approved signing provider and fails
+when credentials or valid signatures are missing. It does not publish a release.
+Unsigned Windows QA artifacts must not be promoted to public release assets.
+
 ## Before making the repository public
 
 - Confirm the owner approved public visibility.

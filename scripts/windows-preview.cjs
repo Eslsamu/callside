@@ -8,14 +8,19 @@ module.exports = {
   directories: { output: '.local/windows-preview' },
   win: { target: ['nsis', 'zip'], signExecutable: false, executableName: 'Callside' },
   nsis: {
-    oneClick: true,
+    // Use the standard wizard; the one-click banner adds SpiderBanner.dll.
+    oneClick: false,
     perMachine: false,
+    selectPerMachineByDefault: false,
     allowElevation: false,
+    // This per-user preview has no updater and never needs admin elevation.
+    packElevateHelper: false,
     createDesktopShortcut: true,
     createStartMenuShortcut: true,
     shortcutName: 'Callside Windows Test',
     uninstallDisplayName: 'Callside Windows Test (preview)',
     deleteAppDataOnUninstall: false,
+    runAfterFinish: false,
   },
   extraMetadata: {
     callsideWindowsPreview: true,
@@ -47,8 +52,8 @@ module.exports = {
       ],
     },
     {
-      from: '.local/models/ggml-large-v3-turbo-q5_0.bin',
-      to: 'models/ggml-large-v3-turbo-q5_0.bin',
+      from: '.local/models/ggml-small-q5_1.bin',
+      to: 'models/ggml-small-q5_1.bin',
     },
   ],
   asarUnpack: [

@@ -1,0 +1,93 @@
+name: Windows preflight checks
+
+on:
+  workflow_dispatch:
+    inputs:
+      artifact_run_id:
+        description: 'Scan an existing Windows test artifact instead of rebuilding (Actions run ID)'
+        required: false
+        type: string
+      release_checks:
+        description: 'Validate public-release safeguards without building or signing an installer'
+        required: false
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    if: ${{ inputs.artifact_run_id == '' && !inputs.release_checks }}
+    runs-on: windows-2022
+    timeout-minutes: 45
+    env:
+      OPENAI_API_KEY: ''
+      CSC_IDENTITY_AUTO_DISCOVERY: 'false'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: Check application logic before packaging
+        run: npm test
+      - name: Build native runtimes and unpacked app only
+        run: npm run desktop:windows-preview -- --check-only
+      - name: Check desktop test flow without microphones or paid APIs
+        run: node tests/windows-desktop-smoke.mjs
+      - name: Test real packaged Whisper inference and simultaneous requests on CPU
+        run: node --import tsx scripts/check-local-inference.ts
+      - name: Keep native inference evidence even if the check fails
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: Windows-native-inference-${{ github.sha }}
+          path: .local/windows-qa/native-inference.json
+          if-no-files-found: warn
+          retention-days: 30
+
+  security-scan:
+    if: ${{ inputs.artifact_run_id != '' && !inputs.release_checks }}
+    runs-on: windows-2022
+    timeout-minutes: 30
+    permissions:
+      contents: read
+      actions: read
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          run-id: ${{ inputs.artifact_run_id }}
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          pattern: Callside-Windows-Test-x64-*
+          merge-multiple: true
+          path: .local/security-input
+      - name: Scan the original installer and extracted portable app
+        shell: pwsh
+        run: ./scripts/windows-security-scan.ps1 -PackageDirectory .local/security-input -ExtractPortable
+      - name: Retain antivirus evidence including failures
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: Windows-security-scan-${{ github.run_id }}
+          path: .local/windows-security/
+          if-no-files-found: error
+          retention-days: 30
+
+  release-checks:
+    if: ${{ inputs.release_checks }}
+    runs-on: windows-2022
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npx vitest run tests/windows-release.test.ts tests/desktop-updates.test.ts
+      - name: Verify Windows signature checks reject an unsigned package
+        shell: pwsh
+        run: ./scripts/check-windows-release.ps1

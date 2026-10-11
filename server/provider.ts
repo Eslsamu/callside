@@ -89,6 +89,12 @@ export function publicError(error: unknown): string {
     return 'OpenAI limit reached. Check your balance and limits, or try again later.';
   if (status === 400 || status === 404)
     return 'OpenAI rejected the request. Check model access, language, reasoning strength, and Fast mode availability.';
+  if (status >= 500 && status <= 599) return `OpenAI service error (HTTP ${status}). Retry later.`;
+  const cause = error instanceof Error ? error.cause : undefined;
+  const code =
+    typeof cause === 'object' && cause !== null && 'code' in cause ? String(cause.code) : '';
+  if (['ECONNRESET', 'ECONNREFUSED', 'ENOTFOUND', 'ETIMEDOUT', 'EAI_AGAIN'].includes(code))
+    return `Could not connect to OpenAI (${code}). Check your network and retry.`;
   if (error instanceof Error && /abort|timeout/i.test(error.name))
     return 'The request was cancelled or timed out.';
   return 'Could not connect to OpenAI. Check your network and model settings.';

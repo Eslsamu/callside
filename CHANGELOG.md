@@ -2,6 +2,29 @@
 
 ## Unreleased
 
+- Separate complete portable Windows QA downloads from installer downloads, retaining checksums and source provenance in both. Use the standard installer wizard with explicit app launch and omit the unused admin-elevation helper from test previews. Browser acceptance of the installer remains unresolved.
+
+- Prepare a separate signed Windows release path that refuses unsigned public builds, verifies publisher and timestamped signatures in the shipped files, scans the final packages and retains checksums and build provenance. Signing activation and public-browser acceptance remain pending.
+- Enable bundled local transcription and speaker models in regular packaged Windows builds as well as QA previews.
+
+- Scan Windows test packages with current Microsoft Defender signatures before distribution and retain scan evidence. Existing test artifacts can also be scanned without rebuilding; browser download reputation remains a separate check.
+
+- Fix Windows upgrades reusing a cached large Whisper model instead of the bundled small model. Verify the production model-preparation path with an old cache present and show the loaded model in setup diagnostics.
+- Archive prior-build Windows QA results separately, show the transcript used for the answer test, preserve recent answer errors across retries, and distinguish safe network error codes from upstream service errors.
+
+- Use multilingual Whisper Small Q5_1 in the Windows CPU test preview, with a pinned checksum and real inference build check. Add explicit session-only API-key answer testing with provider-labeled reports, without changing the regular macOS model.
+
+- Windows guided QA now uses English test speech, offers a 30-minute sustained-call check, and uses the captured call for follow-up answer checks.
+
+- Add a real CPU-only Whisper fixture check to the Windows build workflow, exercising the packaged executable and serialized simultaneous requests, with retained timing and qualitative transcript evidence.
+
+- Address Windows QA findings: select a microphone directly in the guided test, keep transcription errors visible during stop, reduce repeated local decoding on Windows, and drain captured speech on overload. Include local inference timing and empty results in test reports.
+- Distinguish ChatGPT initial sign-in, temporary connection failures, and revoked refresh tokens; retain registration for reconnection and record asynchronous sign-in failures in Windows QA reports.
+
+- Add a Language buddy template for selective wording help and corrections while learning a language in conversation. Existing libraries receive it once without replacing saved templates or the active setup. Document practical use cases and language-practice setup in the README.
+
+- Add a GitHub Actions Windows test build with bundled local models, guided test instructions, checksums and source-commit provenance. This produces a development artifact, not a release.
+
 - Add named templates with independent reference material and settings, copy/rename/delete controls, and migration of the previous saved setup.
 - Split Settings into Templates & task, Models, Audio, Connections, and App. Show Save template only in Templates & task and space ChatGPT account actions consistently.
 - Render Markdown in current and previous results. Fit the full current answer to the panel, resize it with the window, and offer a maximize/restore button with a single reading column. Escape restores the transcript layout.

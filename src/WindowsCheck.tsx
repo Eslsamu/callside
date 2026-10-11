@@ -36,9 +36,13 @@ type Result = {
   attributionMessage: string;
   attributionDelayMs?: number;
   judgments: Partial<Record<Judgment, boolean>>;
+  localInference?: Array<
+    import('../shared/local-test').LocalMeasurement & { source: Source; empty: boolean }
+  >;
 };
 type Shortcut = { state: State; received: number; outsideApp: boolean; message: string };
 type Answer = {
+  billing?: Settings['answerBilling'];
   state: State;
   connected: boolean;
   model: string;
@@ -64,9 +68,17 @@ type Checkpoint = {
   chatgptWasConnected: boolean;
   previousTemplate: Settings | null;
 };
+type PreviousRun = {
+  buildId: string;
+  savedAt: string;
+  checks: SavedState['checks'];
+  notes: string;
+};
 type SavedState = {
   schemaVersion: 2;
   savedAt: string;
+  buildId?: string;
+  previousRuns?: PreviousRun[];
   checks: Record<AudioCheck, Result> & { shortcut: Shortcut; chatgpt: Answer; restart: Restart };
   preferences: { output: string; model: string };
   notes: string;
@@ -97,7 +109,7 @@ const emptyAnswer = (): Answer => ({
   requestCount: 0,
 });
 const phrases = {
-  mic: 'Dies ist der Mikrofontest. Heute testen wir Callside unter Windows.',
+  mic: 'This is the microphone test. Today we are testing Callside on Windows.',
   system: "Euros, which I don't actually know what that is in Pounds, at all. Any ideas?",
 };
 const labels: Record<AudioCheck, string> = {
@@ -136,6 +148,7 @@ export default function WindowsCheck() {
   const [environment, setEnvironment] = useState<Record<string, unknown>>({});
   const [hydrated, setHydrated] = useState(false);
   const [restored, setRestored] = useState(false);
+  const [previousRuns, setPreviousRuns] = useState<PreviousRun[]>([]);
   const [storageMessage, setStorageMessage] = useState('');
   const [exportMessage, setExportMessage] = useState('');
   const [exportBusy, setExportBusy] = useState(false);
@@ -164,9 +177,38 @@ export default function WindowsCheck() {
   const [authBusy, setAuthBusy] = useState(false),
     [authMessage, setAuthMessage] = useState('');
   const [model, setModel] = useState('');
+  const [answerBilling, setAnswerBilling] = useState<Settings['answerBilling']>('chatgpt');
+  const [testApiKey, setTestApiKey] = useState('');
+  const [apiReady, setApiReady] = useState(false);
+  const [keyBusy, setKeyBusy] = useState(false);
+  const [keyMessage, setKeyMessage] = useState('');
+  const answerModel = answerBilling === 'api' ? 'gpt-6-luna' : model;
+  const answerConnected = answerBilling === 'api' ? apiReady : !!chatgpt?.connected;
+  async function configureTestKey(remove = false) {
+    setKeyBusy(true);
+    setKeyMessage('');
+    try {
+      await request('/api/key', { apiKey: remove ? '' : testApiKey.trim(), remember: false });
+      setTestApiKey('');
+      setApiReady(!remove);
+      setKeyMessage(
+        remove
+          ? 'Test key removed.'
+          : 'Test key set for this app session. Re-enter it after restarting.',
+      );
+    } catch {
+      setKeyMessage('Could not set the test key. Check the key and retry.');
+    } finally {
+      setKeyBusy(false);
+    }
+  }
+  const [callLimitMs, setCallLimitMs] = useState(90000);
   const [notes, setNotes] = useState(''),
     [headphones, setHeadphones] = useState('speakers');
   const [speakerEnabled, setSpeakerEnabled] = useState(true);
+  const [microphones, setMicrophones] = useState<MediaDeviceInfo[]>([]);
+  const [micDeviceId, setMicDeviceId] = useState('');
+  const [deviceMessage, setDeviceMessage] = useState('');
   const [level, setLevel] = useState<Record<Source, number>>({ mic: 0, system: 0 });
   const [cue, setCue] = useState('');
   const [armed, setArmed] = useState(false);
@@ -197,6 +239,8 @@ export default function WindowsCheck() {
     return {
       schemaVersion: 2,
       savedAt: new Date().toISOString(),
+      buildId: String(environment.buildId || 'development'),
+      previousRuns,
       checks: { ...report.current, shortcut, chatgpt: answer, restart },
       preferences: { output: headphones, model },
       notes,
@@ -253,7 +297,26 @@ export default function WindowsCheck() {
         setEnvironment(diagnostics);
         const state = loaded as unknown as SavedState | null;
         if (state?.schemaVersion === 2 && state.checks && state.preferences) {
-          setRestored(true);
+          const history = state.previousRuns || [];
+          if (state.buildId !== String(diagnostics.buildId || 'development')) {
+            setPreviousRuns(
+              [
+                ...history,
+                {
+                  buildId: state.buildId || 'unknown older build',
+                  savedAt: state.savedAt,
+                  checks: state.checks,
+                  notes: state.notes,
+                },
+              ].slice(-2),
+            );
+            // Keep the restart recovery checkpoint, but never show old passes as this build's results.
+            state.checks = {} as SavedState['checks'];
+            state.notes = '';
+          } else {
+            setPreviousRuns(history);
+            setRestored(true);
+          }
           const restored = Object.fromEntries(
             (['mic', 'system', 'conversation', 'call'] as const).map((key) => [
               key,
@@ -372,7 +435,7 @@ export default function WindowsCheck() {
       350,
     );
     return () => clearTimeout(id);
-  }, [hydrated, results, shortcut, answer, restart, notes, headphones, model]);
+  }, [hydrated, results, shortcut, answer, restart, notes, headphones, model, previousRuns]);
   useEffect(() => {
     if (!chatgpt?.pending || !token) return;
     let stopped = false;
@@ -393,8 +456,19 @@ export default function WindowsCheck() {
     };
   }, [chatgpt?.pending, token]);
   useEffect(() => {
-    if (chatgpt?.connected && !chatgpt.pending) void authAction('models');
-  }, [chatgpt?.connected, chatgpt?.pending]);
+    if (answerBilling === 'chatgpt' && chatgpt?.connected && !chatgpt.pending)
+      void authAction('models');
+  }, [chatgpt?.connected, chatgpt?.pending, answerBilling]);
+  useEffect(() => {
+    if (answerBilling !== 'chatgpt' || !chatgpt?.error) return;
+    const message = safeMessage(chatgpt.error);
+    setAnswer((old) => ({
+      ...old,
+      state: 'fail',
+      message,
+      errors: old.errors.includes(message) ? old.errors : [...old.errors, message].slice(-10),
+    }));
+  }, [chatgpt?.error, answerBilling]);
   async function authAction(action: 'connect' | 'cancel' | 'models' | 'welcome' | 'disconnect') {
     setAuthBusy(true);
     setAuthMessage('');
@@ -438,6 +512,25 @@ export default function WindowsCheck() {
       setReady(true);
     } catch (error) {
       setSetup({ phase: 'error', message: safeMessage(error) });
+    } finally {
+      setBusy(false);
+    }
+  }
+  async function loadMicrophones() {
+    setBusy(true);
+    setDeviceMessage('');
+    try {
+      // Enumeration still permits selection when the OS default input cannot be opened.
+      const devices = await navigator.mediaDevices.enumerateDevices();
+      const inputs = devices.filter((device) => device.kind === 'audioinput');
+      setMicrophones(inputs);
+      setDeviceMessage(
+        inputs.length
+          ? 'Choose your microphone below. If names are hidden, run the microphone test to grant access, then refresh this list.'
+          : 'No microphone is visible. Connect it and enable Windows Settings → Privacy & security → Microphone → Microphone access and Let desktop apps access your microphone, then restart Callside.',
+      );
+    } catch (error) {
+      setDeviceMessage(safeMessage(error));
     } finally {
       setBusy(false);
     }
@@ -495,17 +588,17 @@ export default function WindowsCheck() {
       commit(check, {
         ...current,
         durationMs: Math.round(performance.now() - started.current),
-        state: stopped
-          ? 'stopped'
-          : current.errors.length
-            ? 'fail'
+        state: current.errors.length
+          ? 'fail'
+          : stopped
+            ? 'stopped'
             : current.text
               ? 'review'
               : 'fail',
-        message: stopped
-          ? 'Test stopped. Retry or continue with the other checks.'
-          : current.errors.length
-            ? 'A problem occurred. Review the text and error details below.'
+        message: current.errors.length
+          ? 'A problem occurred. Review the text and error details below.'
+          : stopped
+            ? 'Test stopped. Retry or continue with the other checks.'
             : current.text
               ? 'Review the transcript below.'
               : 'No transcript received. Retry or continue; the failure is saved.',
@@ -539,16 +632,27 @@ export default function WindowsCheck() {
       const handle = await startCapture(
         {
           ...DEFAULT_SETTINGS,
-          language: combined ? '' : check === 'system' ? 'en' : 'de',
+          language: combined ? '' : 'en',
           transcriptionProvider: 'local',
           diarizationProvider: combined && speakerEnabled ? 'local' : 'off',
           backgroundSpeakers: combined && speakerEnabled,
           captureMic: check !== 'system',
           captureSystem: check !== 'mic',
           captureMode: 'realtime',
+          micDeviceId,
         },
         token,
         {
+          onLocalMeasurement(source, measurement, empty) {
+            const current = report.current[check];
+            commit(check, {
+              ...current,
+              localInference: [
+                ...(current.localInference ?? []),
+                { ...measurement, source, empty },
+              ].slice(-100),
+            });
+          },
           onTranscript(entry) {
             reconcile.current.accept(entry);
             const current = report.current[check];
@@ -636,7 +740,7 @@ export default function WindowsCheck() {
           clearInterval(cueTimer.current);
           setCue(
             check === 'conversation'
-              ? 'Your turn: Ich habe die Stimmen gehört. Bitte fassen Sie das Gespräch kurz zusammen.'
+              ? 'Your turn: I heard the speakers. Please summarize the conversation briefly.'
               : 'Finishing…',
           );
           timer.current = setTimeout(() => void finish(), check === 'conversation' ? 8500 : 1600);
@@ -659,7 +763,7 @@ export default function WindowsCheck() {
           cueTimer.current = setInterval(updateCue, 200);
         }
         timer.current = setTimeout(() => void finish(), check === 'system' ? 20000 : 80000);
-      } else timer.current = setTimeout(() => void finish(), check === 'mic' ? 11000 : 90000);
+      } else timer.current = setTimeout(() => void finish(), check === 'mic' ? 11000 : callLimitMs);
     } catch (error) {
       commit(check, {
         ...report.current[check],
@@ -694,13 +798,22 @@ export default function WindowsCheck() {
           : 'Complete the remaining review questions.',
     });
   }
-  const answerTranscript = results.conversation.entries.length
-    ? results.conversation.entries
-    : results.system.entries.length
-      ? results.system.entries
-      : results.mic.entries;
+  const answerSource = results.call.entries.length
+    ? 'Real call'
+    : results.conversation.entries.length
+      ? 'Recorded conversation'
+      : results.system.entries.length
+        ? 'Computer-audio sample (currency question)'
+        : 'Microphone test';
+  const answerTranscript = results.call.entries.length
+    ? results.call.entries
+    : results.conversation.entries.length
+      ? results.conversation.entries
+      : results.system.entries.length
+        ? results.system.entries
+        : results.mic.entries;
   async function runAnswer() {
-    if (busy || answerAbort.current || !chatgpt?.connected || !model || !answerTranscript.length)
+    if (busy || answerAbort.current || !answerConnected || !answerModel || !answerTranscript.length)
       return;
     setArmed(false);
     setBusy(true);
@@ -713,11 +826,14 @@ export default function WindowsCheck() {
     setAnswer((old) => ({
       ...old,
       state: 'running',
-      connected: true,
-      model,
+      connected: answerBilling === 'chatgpt',
+      billing: answerBilling,
+      model: answerModel,
       text: '',
-      message: 'Requesting one answer through your ChatGPT subscription…',
-      errors: [],
+      message:
+        answerBilling === 'api'
+          ? 'Requesting one answer using the test API key…'
+          : 'Requesting one answer through your ChatGPT subscription…',
       firstTextMs: undefined,
       durationMs: undefined,
       requestCount: old.requestCount + 1,
@@ -728,13 +844,13 @@ export default function WindowsCheck() {
         {
           settings: {
             ...DEFAULT_SETTINGS,
-            answerBilling: 'chatgpt',
-            model: model as Settings['model'],
-            reasoningEffort: reasoningOptions(model)[0],
+            answerBilling,
+            model: answerModel as Settings['model'],
+            reasoningEffort: reasoningOptions(answerModel)[0],
             fastMode: false,
-            maxOutputTokens: null,
+            maxOutputTokens: answerBilling === 'api' ? 256 : null,
             context:
-              'This is a desktop call-assistant test. The transcript comes from a desktop audio test and a licensed meeting recording. Reply in German with one short, useful sentence.',
+              'This is a desktop call-assistant test. The transcript comes from a desktop audio test and a licensed meeting recording. Reply in English with one short, useful sentence.',
             systemPrompt:
               'Suggest the next useful sentence the microphone speaker could say, based on the transcript. Give only the suggested sentence, without a preamble.',
           },
@@ -774,7 +890,7 @@ export default function WindowsCheck() {
         state: 'fail',
         text,
         message,
-        errors: [message],
+        errors: [...old.errors, `${new Date().toISOString()}: ${message}`].slice(-30),
         durationMs: Math.round(performance.now() - before),
       }));
     } finally {
@@ -875,8 +991,9 @@ export default function WindowsCheck() {
       output: headphones,
       checks: { ...report.current, shortcut, chatgpt: answer, restart },
       notes,
+      previousRuns,
       scope:
-        'Guided real microphone and loopback capture, simultaneous sources, local Whisper and local speaker labeling, optional real call application, optional ChatGPT subscription suggestion, global shortcut and persistence across app restart. Skipped, interrupted and not-run steps are not passes. This is a hardware test, not a claim of general Windows support.',
+        'Guided real microphone and loopback capture, simultaneous sources, local Whisper and local speaker labeling, optional real call application, optional ChatGPT subscription or explicit API suggestion (billing field identifies which), global shortcut and persistence across app restart. Skipped, interrupted and not-run steps are not passes. This is a hardware test, not a claim of general Windows support.',
       privacy:
         'Includes test transcript text, your optional notes, results and basic system specifications. No audio, API keys, account identifiers, authentication tokens, device IDs, usernames or saved templates. Reports stay on this computer until you share them.',
     };
@@ -1080,7 +1197,7 @@ export default function WindowsCheck() {
       state: result.state,
     })),
     { label: 'Global shortcut', state: shortcut.state },
-    { label: 'ChatGPT answer', state: answer.state },
+    { label: 'Answer', state: answer.state },
     { label: 'Restart and settings', state: restart.state },
   ];
   return (
@@ -1093,12 +1210,18 @@ export default function WindowsCheck() {
           one report back. A failed step does not prevent the remaining checks.
         </p>
         <p className="field-help">
-          Audio and speaker analysis run locally. Only the optional ChatGPT answer sends the
+          Audio and speaker analysis run locally. Only the optional answer request sends the
           displayed test transcript to your own account. Use the test sentences, not private
           conversations.
         </p>
       </header>
       {!hydrated && <p role="status">Loading test progress…</p>}
+      {previousRuns.length > 0 && (
+        <p role="status">
+          Results from {previousRuns.length} earlier build(s) are archived in the report. This build
+          starts with fresh checks; saved settings are retained.
+        </p>
+      )}
       {restored && (
         <p role="status">
           Previous test progress restored.{' '}
@@ -1144,6 +1267,32 @@ export default function WindowsCheck() {
             <option value="headphones">Headphones</option>
           </select>
         </label>
+        <label>
+          Microphone input
+          <select
+            value={micDeviceId}
+            disabled={busy}
+            onChange={(event) => setMicDeviceId(event.target.value)}
+          >
+            <option value="">System default</option>
+            {microphones
+              .filter((device) => device.deviceId && device.deviceId !== 'default')
+              .map((device, index) => (
+                <option key={device.deviceId} value={device.deviceId}>
+                  {device.label || `Microphone ${index + 1}`}
+                </option>
+              ))}
+          </select>
+        </label>
+        <button className="secondary-button" disabled={busy} onClick={() => void loadMicrophones()}>
+          Refresh microphone list
+        </button>
+        {deviceMessage && <p role="status">{deviceMessage}</p>}
+        <p className="field-help">
+          If the default input fails, select your headset or built-in microphone here. This
+          selection applies to all microphone checks in this session. Check Windows microphone
+          access for desktop apps if no input is available.
+        </p>
         <p className="field-help">
           Use your normal speakers at a comfortable volume. Pause unrelated audio. Each recording
           stops automatically and can also be stopped manually.
@@ -1185,7 +1334,7 @@ export default function WindowsCheck() {
         </p>
         <p>
           Your reply after playback:{' '}
-          <strong>Ich habe die Stimmen gehört. Bitte fassen Sie das Gespräch kurz zusammen.</strong>
+          <strong>I heard the speakers. Please summarize the conversation briefly.</strong>
         </p>
         <details className="check-reference">
           <summary>Reference voices and recording credit</summary>
@@ -1236,13 +1385,24 @@ export default function WindowsCheck() {
         <p>
           For a full check, open a short test call in WhatsApp, Teams, Zoom, or your usual app. Tell
           the other person this is a transcription test. Take turns saying a few non-private
-          sentences, then click Finish call test. It stops after 90 seconds at the latest.
+          sentences, then click Finish call test. Capture stops at the selected time limit.
         </p>
         <p className="field-help">
           This tests audio from a real call app. The recorded conversation above cannot verify its
           device routing. Skip if nobody is available; the report will state that this was not
           tested.
         </p>
+        <label>
+          Call test time limit
+          <select
+            value={callLimitMs}
+            disabled={busy}
+            onChange={(event) => setCallLimitMs(Number(event.target.value))}
+          >
+            <option value={90000}>90 seconds — quick check</option>
+            <option value={1800000}>30 minutes — sustained capture</option>
+          </select>
+        </label>
         <div className="check-actions">
           <button
             className="secondary-button"
@@ -1258,7 +1418,7 @@ export default function WindowsCheck() {
         {transcript('call')}
       </section>
       <section aria-labelledby="shortcut-title">
-        <h2 id="shortcut-title">5. Global shortcut and ChatGPT answer</h2>
+        <h2 id="shortcut-title">5. Global shortcut and answer</h2>
         <p>
           Open another window, such as Notepad. While that window is active, press <kbd>F8</kbd> or{' '}
           <kbd>Ctrl + Shift + Space</kbd>, then return here.
@@ -1278,110 +1438,204 @@ export default function WindowsCheck() {
         >
           Skip shortcut
         </button>
-        <h3 className="check-subheading">One answer through your subscription</h3>
-        <p>
-          You need your own ChatGPT account with an eligible subscription. Sign in yourself in the
-          browser that opens, then return here. No API key is used. This optional request counts
-          toward your subscription limits.
-        </p>
-        <p role="status">
-          {chatgpt?.connected
-            ? 'ChatGPT connected.'
-            : chatgpt?.pending
-              ? 'Finish signing in in your browser, then return here.'
-              : chatgpt?.available
-                ? 'ChatGPT not connected.'
-                : 'ChatGPT sign-in is unavailable in this build.'}
-        </p>
-        {chatgpt?.welcomePending && (
-          <div className="check-actions">
-            <p>
-              This connection uses your ChatGPT subscription and its usage limits. API credits are
-              not used.
-            </p>
-            <button
-              className="secondary-button"
-              disabled={authBusy || busy}
-              onClick={() => void authAction('welcome')}
-            >
-              Got it
-            </button>
-          </div>
-        )}
-        <div className="check-actions">
-          {chatgpt?.pending ? (
-            <button
-              className="secondary-button"
-              disabled={authBusy || busy}
-              onClick={() => void authAction('cancel')}
-            >
-              Cancel sign-in
-            </button>
-          ) : (
-            <button
-              className="secondary-button"
-              disabled={authBusy || busy || !chatgpt?.available}
-              onClick={() => void authAction(chatgpt?.connected ? 'models' : 'connect')}
-            >
-              {chatgpt?.connected ? 'Refresh models' : 'Connect to ChatGPT'}
-            </button>
-          )}
-          <button
-            className="text-button"
-            disabled={busy}
-            onClick={() => {
+        <label>
+          Answer connection
+          <select
+            value={answerBilling}
+            disabled={busy || keyBusy || authBusy}
+            onChange={(event) => {
+              setAnswerBilling(event.target.value as Settings['answerBilling']);
               setArmed(false);
-              if (chatgpt?.pending) void authAction('cancel');
-              setAnswer((old) => ({
-                ...old,
-                state: 'skipped',
-                message: 'Skipped by the tester. Subscription answers are not verified.',
-              }));
+              setAnswer((old) => ({ ...emptyAnswer(), errors: old.errors }));
             }}
           >
-            Skip ChatGPT test
-          </button>
-        </div>
-        {(authMessage || chatgpt?.error) && (
-          <p role="alert" className="check-errors">
-            {authMessage || safeMessage(chatgpt?.error)}
-          </p>
-        )}
-        {chatgpt?.connected && (
+            <option value="chatgpt">ChatGPT subscription</option>
+            <option value="api">Provided API test key</option>
+          </select>
+        </label>
+        {answerBilling === 'api' && (
           <>
+            <h3 className="check-subheading">Answer using the provided test key</h3>
+            <p>
+              Uses GPT-6 Luna with reasoning off and up to 256 output tokens. Only this answer
+              request uses API credits. Audio transcription and speaker labels stay local. This does
+              not verify ChatGPT subscription sign-in.
+            </p>
             <label>
-              Answer model
-              <select
-                value={model}
-                disabled={busy || authBusy}
-                onChange={(event) => setModel(event.target.value)}
-              >
-                {!availableModels.length && <option value="">No supported model available</option>}
-                {availableModels.map((entry) => (
-                  <option key={entry.id} value={entry.id}>
-                    {entry.name}
-                  </option>
-                ))}
-              </select>
+              Test API key
+              <input
+                type="password"
+                autoComplete="off"
+                value={testApiKey}
+                disabled={busy || keyBusy}
+                onChange={(event) => setTestApiKey(event.target.value)}
+              />
             </label>
+            <div className="check-actions">
+              <button
+                className="secondary-button"
+                disabled={busy || keyBusy || !token || !testApiKey.trim()}
+                onClick={() => void configureTestKey()}
+              >
+                Use test key for this session
+              </button>
+              <button
+                className="text-button"
+                disabled={busy || keyBusy || !apiReady}
+                onClick={() => void configureTestKey(true)}
+              >
+                Remove test key
+              </button>
+            </div>
+            <p role="status">{keyMessage}</p>
+            <p className="field-help">
+              The key is kept in memory, never included in the report or checkpoint. Re-enter after
+              restarting. An expired or exhausted key is a blocker to report; do not buy credits.
+            </p>
+          </>
+        )}
+        {answerBilling === 'chatgpt' && (
+          <>
+            <h3 className="check-subheading">One answer through your subscription</h3>
+            <p>
+              You need your own ChatGPT account with an eligible subscription. Sign in yourself in
+              the browser that opens, then return here. No API key is used. This optional request
+              counts toward your subscription limits.
+            </p>
+            <p role="status">
+              {chatgpt?.connected
+                ? 'ChatGPT connected.'
+                : chatgpt?.pending
+                  ? 'Finish signing in in your browser, then return here.'
+                  : chatgpt?.available
+                    ? 'ChatGPT not connected.'
+                    : 'ChatGPT sign-in is unavailable in this build.'}
+            </p>
+            {chatgpt?.welcomePending && (
+              <div className="check-actions">
+                <p>
+                  This connection uses your ChatGPT subscription and its usage limits. API credits
+                  are not used.
+                </p>
+                <button
+                  className="secondary-button"
+                  disabled={authBusy || busy}
+                  onClick={() => void authAction('welcome')}
+                >
+                  Got it
+                </button>
+              </div>
+            )}
+            <div className="check-actions">
+              {chatgpt?.pending ? (
+                <button
+                  className="secondary-button"
+                  disabled={authBusy || busy}
+                  onClick={() => void authAction('cancel')}
+                >
+                  Cancel sign-in
+                </button>
+              ) : (
+                <button
+                  className="secondary-button"
+                  disabled={authBusy || busy || !chatgpt?.available}
+                  onClick={() => void authAction(chatgpt?.connected ? 'models' : 'connect')}
+                >
+                  {chatgpt?.connected ? 'Refresh models' : 'Connect to ChatGPT'}
+                </button>
+              )}
+              <button
+                className="text-button"
+                disabled={busy}
+                onClick={() => {
+                  setArmed(false);
+                  if (chatgpt?.pending) void authAction('cancel');
+                  setAnswer((old) => ({
+                    ...old,
+                    state: 'skipped',
+                    message: 'Skipped by the tester. Subscription answers are not verified.',
+                  }));
+                }}
+              >
+                Skip ChatGPT test
+              </button>
+            </div>
+            {(authMessage || chatgpt?.error) && (
+              <p role="alert" className="check-errors">
+                {authMessage || safeMessage(chatgpt?.error)}
+              </p>
+            )}
+          </>
+        )}
+        {answerConnected && (
+          <>
+            {answerBilling === 'chatgpt' && (
+              <label>
+                Answer model
+                <select
+                  value={model}
+                  disabled={busy || authBusy}
+                  onChange={(event) => setModel(event.target.value)}
+                >
+                  {!availableModels.length && (
+                    <option value="">No supported model available</option>
+                  )}
+                  {availableModels.map((entry) => (
+                    <option key={entry.id} value={entry.id}>
+                      {entry.name}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            )}
             <p className="field-help">
               Uses the lowest supported reasoning setting. The request includes only a transcript
-              recorded in this test, with no API fallback.
+              recorded in this test. The selected connection is used with no automatic fallback.
             </p>
-            {!answerTranscript.length && (
+            <p>
+              Step 5 reuses captured text; it does not record new speech. To record a new sample,
+              run the microphone check in Step 2, or the conversation/call check above, then return
+              here.
+            </p>
+            {answerTranscript.length ? (
+              <details open>
+                <summary>Transcript used: {answerSource}</summary>
+                <p>
+                  {answerTranscript.map((entry) => `${entry.speaker}: ${entry.text}`).join('\n')}
+                </p>
+              </details>
+            ) : (
               <p>Record at least one audio test before requesting an answer.</p>
+            )}
+            {answer.errors.length > 0 && (
+              <details>
+                <summary>Previous answer errors ({answer.errors.length})</summary>
+                {answer.errors.map((error, index) => (
+                  <p key={index}>{error}</p>
+                ))}
+              </details>
             )}
             <div className="check-actions">
               <button
                 className="secondary-button"
-                disabled={busy || !model || !answerTranscript.length || !!chatgpt.pending}
+                disabled={
+                  busy ||
+                  !answerModel ||
+                  !answerTranscript.length ||
+                  (answerBilling === 'chatgpt' && !!chatgpt?.pending)
+                }
                 onClick={() => setArmed(true)}
               >
                 {armed ? 'Waiting for your shortcut…' : 'Use shortcut for one answer'}
               </button>
               <button
                 className="quiet-button"
-                disabled={busy || !model || !answerTranscript.length || !!chatgpt.pending}
+                disabled={
+                  busy ||
+                  !answerModel ||
+                  !answerTranscript.length ||
+                  (answerBilling === 'chatgpt' && !!chatgpt?.pending)
+                }
                 onClick={() => void runAnswer()}
               >
                 Request one test answer
