@@ -68,12 +68,27 @@ jobs:
             signed = $false
             purpose = 'Development test preview, not a version release'
           } | ConvertTo-Json | Set-Content .local/windows-preview/BUILD.json
-      - uses: actions/upload-artifact@v4
+      # Keep the installer separate so testers can choose the complete portable
+      # app for runtime QA. Both downloads retain identical build provenance.
+      - name: Upload complete portable test app
+        uses: actions/upload-artifact@v4
         with:
-          name: Callside-Windows-Test-x64-${{ github.sha }}
+          name: Callside-Windows-Test-x64-Portable-${{ github.sha }}
+          path: |
+            .local/windows-preview/Callside-Windows-Test-x64.zip
+            .local/windows-preview/START_HERE.txt
+            .local/windows-preview/TESTING.md
+            .local/windows-preview/SHA256SUMS.txt
+            .local/windows-preview/BUILD.json
+          if-no-files-found: error
+          compression-level: 0
+          retention-days: 30
+      - name: Upload test installer separately
+        uses: actions/upload-artifact@v4
+        with:
+          name: Callside-Windows-Test-x64-Installer-${{ github.sha }}
           path: |
             .local/windows-preview/Callside-Windows-Test-x64.exe
-            .local/windows-preview/Callside-Windows-Test-x64.zip
             .local/windows-preview/START_HERE.txt
             .local/windows-preview/TESTING.md
             .local/windows-preview/SHA256SUMS.txt

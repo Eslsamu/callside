@@ -4,7 +4,14 @@ See [the October 8 QA findings and focused retest](windows-qa-2026-10-08.md) for
 
 ## Download an auditable GitHub Actions test build
 
-Open the **Windows test build** workflow under the repository's Actions tab. Select a successful run and download its `Callside-Windows-Test-x64-<commit>` artifact (GitHub sign-in is required). Extract the artifact ZIP and read `START_HERE.txt`. Run the included `.exe` installer, or extract the nested portable `.zip` completely and run `Callside.exe`.
+Open the **Windows test build** workflow under the repository's Actions tab. Select a successful run (GitHub sign-in is required). New builds provide two separate artifacts:
+
+- **`Callside-Windows-Test-x64-Portable-<commit>`:** the complete app and both local models. Extract the artifact ZIP, then extract the enclosed `Callside-Windows-Test-x64.zip` completely. Run `Callside.exe` from the extracted folder and keep all its accompanying files.
+- **`Callside-Windows-Test-x64-Installer-<commit>`:** the installer. Extract the artifact ZIP, then run `Callside-Windows-Test-x64.exe`. Follow the wizard, choose **Only for me** if asked, and open the **Callside Windows Test** desktop shortcut after installation.
+
+Read `START_HERE.txt` and tell the maintainer which package you tested. Use the portable artifact for runtime QA while the installer download warning is under review. Portable tests cover the app, capture, models, suggestions and settings; they do not establish installation, shortcut or uninstall behavior. Windows browser acceptance remains a separate check. If either download is blocked, report the warning without changing security settings.
+
+Older runs use one combined `Callside-Windows-Test-x64-<commit>` artifact containing both packages. Do not assume an old run has the new artifact layout or current fixes.
 
 The artifact includes `BUILD.json` with the exact source commit and workflow run, plus `SHA256SUMS.txt`. It is built on a GitHub-hosted Windows runner from the public source, not uploaded from a maintainer's computer. It remains unsigned: provenance does not guarantee safety or remove Windows security warnings. If blocked, report the warning without disabling security software. Artifacts expire after 30 days; no release or version bump is created.
 
@@ -14,7 +21,7 @@ This development preview targets Windows 11 on Intel/AMD x64 PCs with AVX2, FMA 
 
 ## One tester session
 
-Run `Callside-Windows-Test-x64.exe`. The installer works per user, creates a shortcut, and opens the guided test. No developer tools, API key or separate model download is needed. For the optional answer test, use your own eligible ChatGPT subscription or a provided API test key. No purchase is required. Allow approximately 10–15 minutes after initial model loading; a short call with a second person can be included in the same session.
+Open the portable `Callside.exe`, or use the installer and open its desktop shortcut as described above. Both open the same guided test. The installer additionally creates a shortcut and does not launch the app automatically. No developer tools, API key or separate model download is needed. For the optional answer test, use your own eligible ChatGPT subscription or a provided API test key. No purchase is required. Allow approximately 10–15 minutes after initial model loading; a short call with a second person can be included in the same session.
 
 1. Prepare the bundled Whisper model and enable test capture. Refresh the microphone list and select your headset or built-in input if the Windows default does not work.
 2. Read the English microphone sentence; play the computer-audio sentence. Review each transcript for substantial errors.
@@ -26,7 +33,7 @@ Run `Callside-Windows-Test-x64.exe`. The installer works per user, creates a sho
 
 Results are saved locally between steps. An interrupted recording is marked interrupted on reopening, not resumed automatically. A failed speaker setup can be bypassed explicitly to finish the audio checks, while speaker labeling remains unverified. No automatic cloud fallback is used.
 
-The preview uses separate `Callside Windows Test` application data and does not check for updates. Installing or removing it does not replace the normal Callside app. Removing the test app preserves its settings and test progress.
+The preview uses separate `Callside Windows Test` application data and does not check for updates. Installing or removing it does not replace the normal Callside app. Removing the test app preserves its settings and test progress. The portable and installed test apps share this test profile; do not run both together or count switching packages as a clean first-run test.
 
 ## Included runtimes and fixtures
 
@@ -44,7 +51,7 @@ The report contains test transcript text, optional notes, check outcomes, approx
 
 A disposable encrypted sentinel checks storage across processes. It is separate from real credentials. The settings test temporarily saves a nonce through the normal template store, keeps a local backup, and restores the previous template afterward. That backup is not exported.
 
-Unsigned private previews can trigger Windows security warnings. If the installer or app is blocked, return a screenshot; do not disable security software. Actual Windows audio devices, call applications, account login, installation and security behavior require the tester's machine. Browser mocks, native binary import inspection and macOS Electron checks cannot establish those results.
+Unsigned development previews can trigger Windows security warnings. If the installer or app is blocked, return a screenshot; do not disable security software. Actual Windows audio devices, call applications, account login, installation and security behavior require the tester's machine. Browser mocks, native binary import inspection and macOS Electron checks cannot establish those results.
 
 ## Rebuild and developer verification
 
@@ -62,6 +69,6 @@ node scripts/check-portable-speakers.mjs
 npm run desktop:windows-preview -- --test-package
 ```
 
-The explicitly requested test build produces a private NSIS installer and portable ZIP under `.local/windows-preview`. It does not bump the version, publish, create a DMG, or change `release/Latest`. A timestamped build ID distinguishes reports.
+The explicitly requested test build produces an unsigned NSIS installer and portable ZIP under `.local/windows-preview`. It does not bump the version, publish a release, create a DMG, or change `release/Latest`. The GitHub workflow uploads them as separate artifacts. A timestamped build ID distinguishes reports.
 
 Verification covers mocked account success/failure without provider charges, actual browser audio processing, capture cleanup, report redaction, native Electron checkpoint/restart/export with isolated profiles, actual portable speaker inference and packaged ASAR/WASM loading. The hidden native test substitutes encryption to avoid host credential prompts; Windows DPAPI is verified by the tester's actual restart step.

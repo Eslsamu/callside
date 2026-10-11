@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Separate complete portable Windows QA downloads from installer downloads, retaining checksums and source provenance in both. Use the standard installer wizard with explicit app launch and omit the unused admin-elevation helper from test previews. Browser acceptance of the installer remains unresolved.
+
 - Prepare a separate signed Windows release path that refuses unsigned public builds, verifies publisher and timestamped signatures in the shipped files, scans the final packages and retains checksums and build provenance. Signing activation and public-browser acceptance remain pending.
 - Enable bundled local transcription and speaker models in regular packaged Windows builds as well as QA previews.
 

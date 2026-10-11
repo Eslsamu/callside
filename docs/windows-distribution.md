@@ -93,6 +93,40 @@ artifact was submitted to Google on October 11, 2026. That submission is not
 confirmation that the block has been removed, and a new signed artifact needs
 its own download verification.
 
+### October 11 installer isolation
+
+The maintainer tested copies of the October 10 build in Chrome on macOS with
+normal browser protections. These are user-observed download results, not
+Windows installation or runtime results:
+
+| Download                                              | Result                                                                      |
+| ----------------------------------------------------- | --------------------------------------------------------------------------- |
+| Complete original portable ZIP, including Whisper     | Download allowed                                                            |
+| Portable ZIP with only the Whisper executable removed | Download allowed; diagnostic copy is not functional for local transcription |
+| ZIP containing only the unchanged installer           | Dangerous download blocked                                                  |
+| Latest retry of the original combined artifact        | Unverified; not visible in the maintainer's download history                |
+
+The [portable comparison](https://github.com/Eslsamu/callside/actions/runs/38141683093)
+and [installer-only comparison](https://github.com/Eslsamu/callside/actions/runs/38142714711)
+retain hashes and provenance. Diagnostic artifacts expire after seven days.
+
+Extraction of the original NSIS installer found all 734 portable app files
+byte-identical, plus `resources/elevate.exe`. Its six installer plugins and the
+elevation helper match the cached upstream electron-builder NSIS binaries.
+Existing VirusTotal reports for the helper, uninstaller and five plugins had
+zero detections when checked. The optional
+[SpiderBanner.dll installer banner](https://www.virustotal.com/gui/file/996a259e53ca18b89ec36d038c40148957c978c0fd600a268497d4c92f882a93)
+had one detection from Cynet out of 69 engines; Google's engine timed out.
+This does not identify the reason for the Safe Browsing block.
+
+The next test-build configuration uses the standard NSIS wizard without the
+one-click banner, omits the unused elevation helper because preview updates are
+disabled, and requires the user to open the app after installation. It provides
+the full portable app separately for runtime QA. These are packaging changes,
+not evidence of browser clearance. Confirm the generated contents and repeat
+the download check after an explicitly requested installer build. Keep the
+Google review open until the reported block is resolved.
+
 Do not disable security protections, repackage files to conceal their contents,
 or instruct public users to bypass malware warnings as the installation flow.
 
