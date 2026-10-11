@@ -119,13 +119,18 @@ zero detections when checked. The optional
 had one detection from Cynet out of 69 engines; Google's engine timed out.
 This does not identify the reason for the Safe Browsing block.
 
-The next test-build configuration uses the standard NSIS wizard without the
-one-click banner, omits the unused elevation helper because preview updates are
-disabled, and requires the user to open the app after installation. It provides
-the full portable app separately for runtime QA. These are packaging changes,
-not evidence of browser clearance. Confirm the generated contents and repeat
-the download check after an explicitly requested installer build. Keep the
-Google review open until the reported block is resolved.
+[Test build `45588b5`](https://github.com/Eslsamu/callside/actions/runs/38144979458)
+uses the standard NSIS wizard without the one-click banner, omits the unused
+elevation helper because preview updates are disabled, and requires the user to
+open the app after installation. It provides the full portable app separately
+for runtime QA. The build passed 143 unit tests, the desktop smoke test, packaged
+Whisper inference and a Defender scan with zero detections. A separate
+[static archive inspection](https://github.com/Eslsamu/callside/actions/runs/38145907552)
+verified the package checksums, absence of both removed components, and all 734
+app files matching between the installer and portable ZIP.
+
+Chrome acceptance of this new build and Windows installation behavior remain
+unverified. Keep the Google review open until the reported block is resolved.
 
 Do not disable security protections, repackage files to conceal their contents,
 or instruct public users to bypass malware warnings as the installation flow.
