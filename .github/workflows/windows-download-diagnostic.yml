@@ -1,0 +1,68 @@
+name: Windows download diagnostic
+
+on:
+  push:
+    branches: [codex/windows-download-isolation]
+    paths:
+      - '.github/workflows/windows-download-diagnostic.yml'
+      - 'scripts/windows-download-diagnostic.py'
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  compare:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - name: Download the exact existing QA build
+        uses: actions/download-artifact@v4
+        with:
+          run-id: 38023851945
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          name: Callside-Windows-Test-x64-2eef248013a8a7095be875717b94232910bedea7
+          path: .local/download-diagnostic-input
+      - name: Remove only the Whisper helper and verify all retained entries
+        run: python3 scripts/windows-download-diagnostic.py .local/download-diagnostic-input/Callside-Windows-Test-x64.zip .local/download-diagnostic
+      - name: Upload unchanged portable control
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: Callside-Download-Diagnostic-Control-With-Whisper
+          path: .local/download-diagnostic/control/Callside-Windows-Test-x64.zip
+          if-no-files-found: error
+          compression-level: 0
+          retention-days: 7
+      - name: Upload portable ZIP without the Whisper executable
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: Callside-Download-Diagnostic-Without-Whisper
+          path: .local/download-diagnostic/without-whisper/Callside-Windows-Test-x64.zip
+          if-no-files-found: error
+          compression-level: 0
+          retention-days: 7
+      - name: Upload comparison evidence
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: Callside-Download-Diagnostic-Evidence
+          path: .local/download-diagnostic/evidence/
+          if-no-files-found: error
+          retention-days: 7
+      - name: Explain the limited diagnostic purpose
+        run: |
+          cat >> "$GITHUB_STEP_SUMMARY" <<'SUMMARY'
+          ## Chrome download comparison
+
+          These are temporary diagnostic artifacts, not app releases or installation recommendations.
+          Both contain the same portable ZIP from build `2eef248`. The second removes only
+          `resources/app.asar.unpacked/desktop/bin/windows/whisper-server.exe`.
+          All 767 retained entries are verified unchanged. No binaries are run.
+
+          Test both downloads with normal browser protection enabled. Record the final outcome,
+          not just download progress. Do not disable protection or override a blocked download.
+          The candidate lacks local transcription and should not be installed or shared with testers.
+
+          The original blocked artifact also contained an installer; it is omitted from both controls.
+          Different ZIP hashes and download reputation limit causal conclusions even if outcomes differ.
+          SUMMARY
