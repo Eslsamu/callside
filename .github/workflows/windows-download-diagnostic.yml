@@ -5,79 +5,45 @@ on:
     branches: [codex/windows-download-isolation]
     paths:
       - '.github/workflows/windows-download-diagnostic.yml'
-      - 'scripts/windows-download-diagnostic.py'
+      - 'scripts/windows-package-inspection.py'
 
 permissions:
   contents: read
   actions: read
 
 jobs:
-  installer:
+  inspect:
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
-      - name: Download the exact existing QA build
+      - name: Download the completed test packages for static inspection
         uses: actions/download-artifact@v4
         with:
-          run-id: 38023851945
+          run-id: 38144979458
           github-token: ${{ secrets.GITHUB_TOKEN }}
-          name: Callside-Windows-Test-x64-2eef248013a8a7095be875717b94232910bedea7
-          path: .local/download-diagnostic-input
-      - name: Verify the original installer without running or modifying it
-        run: |
-          python3 - <<'PY'
-          import hashlib, json
-          from pathlib import Path
-          installer = Path('.local/download-diagnostic-input/Callside-Windows-Test-x64.exe')
-          with installer.open('rb') as stream:
-              actual = hashlib.file_digest(stream, 'sha256').hexdigest()
-          expected = '4e762dc38da3c46a3eea81e0770be0fae104ea0d2698342fe89d1cad29abac75'
-          if actual != expected:
-              raise SystemExit('The installer does not match the original tested binary.')
-          evidence = Path('.local/download-diagnostic/evidence')
-          evidence.mkdir(parents=True, exist_ok=False)
-          (evidence / 'installer-comparison.json').write_text(json.dumps({
-              'purpose': 'Test the unchanged installer alone after both portable ZIP variants downloaded successfully.',
-              'sourceCommit': '2eef248013a8a7095be875717b94232910bedea7',
-              'sourceArtifact': 'https://github.com/Eslsamu/callside/actions/runs/38023851945/artifacts/11659492017',
-              'portableComparisonRun': 'https://github.com/Eslsamu/callside/actions/runs/38141683093',
-              'installerSha256': actual,
-              'installerBytes': installer.stat().st_size,
-              'installerModified': False,
-              'filesExecuted': False,
-              'browserResult': 'Pending final browser verdict. A successful CI job is not proof of browser acceptance.',
-          }, indent=2) + '\n')
-          PY
-      - name: Upload the unchanged installer by itself
+          pattern: Callside-Windows-Test-x64-*
+          path: .local/package-inspection/artifacts
+      - name: Verify hashes, component removal and identical portable app payload
+        run: python3 scripts/windows-package-inspection.py
+      - name: Retain inspection evidence without redistributing the packages
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
-          name: Callside-Download-Diagnostic-Installer-Only
-          path: .local/download-diagnostic-input/Callside-Windows-Test-x64.exe
+          name: Callside-Windows-Package-Inspection-45588b5
+          path: |
+            .local/package-inspection/verification.json
+            .local/package-inspection/installer-list.txt
           if-no-files-found: error
-          compression-level: 0
-          retention-days: 7
-      - name: Upload comparison evidence
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
-        with:
-          name: Callside-Download-Diagnostic-Installer-Evidence
-          path: .local/download-diagnostic/evidence/
-          if-no-files-found: error
-          retention-days: 7
-      - name: Explain the limited diagnostic purpose
+          retention-days: 30
+      - name: Summarize the package check
         run: |
           cat >> "$GITHUB_STEP_SUMMARY" <<'SUMMARY'
-          ## Installer download follow-up
+          ## Static package verification
 
-          Samuel confirmed that both portable ZIP variants from [the previous comparison](https://github.com/Eslsamu/callside/actions/runs/38141683093)
-          downloaded successfully, including the unchanged package with Whisper.
+          Inspected the exact packages from [Windows test build 45588b5](https://github.com/Eslsamu/callside/actions/runs/38144979458).
+          Verified package checksums and build commit, removal of SpiderBanner.dll and elevate.exe,
+          and byte-identical application files between the installer and complete portable ZIP.
 
-          This temporary artifact contains only the original installer from build `2eef248`,
-          verified against its original SHA-256. Nothing is rebuilt or executed.
-          It is a diagnostic artifact, not a release or an installation recommendation.
-
-          Compare the final Chrome download result for this artifact with a fresh download of
-          [the exact original combined artifact](https://github.com/Eslsamu/callside/actions/runs/38023851945/artifacts/11659492017).
-          Leave browser protections enabled and do not override a blocked download.
-          Different outer ZIP hashes and download reputation still limit causal conclusions.
+          No package was rebuilt, repackaged, installed or executed by this job.
+          This does not establish Chrome acceptance or Windows installation behavior.
           SUMMARY
