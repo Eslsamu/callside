@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Scan Windows test packages with current Microsoft Defender signatures before distribution and retain scan evidence. Existing test artifacts can also be scanned without rebuilding; browser download reputation remains a separate check.
+
 - Fix Windows upgrades reusing a cached large Whisper model instead of the bundled small model. Verify the production model-preparation path with an old cache present and show the loaded model in setup diagnostics.
 - Archive prior-build Windows QA results separately, show the transcript used for the answer test, preserve recent answer errors across retries, and distinguish safe network error codes from upstream service errors.
 

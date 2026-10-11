@@ -30,6 +30,17 @@ jobs:
         run: npm test
       - name: Build native runtimes and test packages from this commit
         run: npm run desktop:windows-preview -- --test-package
+      - name: Scan packaged files before desktop execution and distribution
+        shell: pwsh
+        run: ./scripts/windows-security-scan.ps1 -PackageDirectory .local/windows-preview
+      - name: Retain antivirus evidence including failures
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: Windows-security-scan-${{ github.run_id }}
+          path: .local/windows-security/
+          if-no-files-found: warn
+          retention-days: 30
       - name: Check desktop test flow without microphones or paid APIs
         run: node tests/windows-desktop-smoke.mjs
       - name: Test real packaged Whisper inference and simultaneous requests on CPU

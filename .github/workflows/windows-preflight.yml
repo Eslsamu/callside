@@ -2,12 +2,18 @@ name: Windows preflight checks
 
 on:
   workflow_dispatch:
+    inputs:
+      artifact_run_id:
+        description: 'Scan an existing Windows test artifact instead of rebuilding (Actions run ID)'
+        required: false
+        type: string
 
 permissions:
   contents: read
 
 jobs:
   build:
+    if: ${{ inputs.artifact_run_id == '' }}
     runs-on: windows-2022
     timeout-minutes: 45
     env:
@@ -35,4 +41,32 @@ jobs:
           name: Windows-native-inference-${{ github.sha }}
           path: .local/windows-qa/native-inference.json
           if-no-files-found: warn
+          retention-days: 30
+
+  security-scan:
+    if: ${{ inputs.artifact_run_id != '' }}
+    runs-on: windows-2022
+    timeout-minutes: 30
+    permissions:
+      contents: read
+      actions: read
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          run-id: ${{ inputs.artifact_run_id }}
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          pattern: Callside-Windows-Test-x64-*
+          merge-multiple: true
+          path: .local/security-input
+      - name: Scan the original installer and extracted portable app
+        shell: pwsh
+        run: ./scripts/windows-security-scan.ps1 -PackageDirectory .local/security-input -ExtractPortable
+      - name: Retain antivirus evidence including failures
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: Windows-security-scan-${{ github.run_id }}
+          path: .local/windows-security/
+          if-no-files-found: error
           retention-days: 30
