@@ -1,6 +1,6 @@
 {
   "name": "callside",
-  "version": "0.7.0",
+  "version": "0.8.0",
   "description": "Open-source live call assistance without typing. Contextual suggestions, transcription, and global shortcuts.",
   "private": true,
   "type": "module",

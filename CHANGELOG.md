@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+## 0.8.0 - 2026-10-14
+
 - Add named templates with independent reference material and settings, copy/rename/delete controls, and migration of the previous saved setup.
 - Split Settings into Templates & task, Models, Audio, Connections, and App. Show Save template only in Templates & task and space ChatGPT account actions consistently.
 - Render Markdown in current and previous results. Fit the full current answer to the panel, resize it with the window, and offer a maximize/restore button with a single reading column. Escape restores the transcript layout.
